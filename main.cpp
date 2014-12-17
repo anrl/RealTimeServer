@@ -18,6 +18,7 @@ int count_pollfds;
 extern unsigned char* imageBuf;
 extern int *pos;
 extern int *imageSize;
+extern int GROUP_SIZE;
 
 static volatile int force_exit = 0;
 static struct libwebsocket_context *context;
@@ -209,11 +210,12 @@ int main(int argc, char **argv)
 			imageID = (imageID+1)%100000;
  			Mat frame;
 			camera>>frame;
+			GROUP_SIZE = n>MAX_GROUP_SIZE?MAX_GROUP_SIZE:n;
 			for(int i=0;i<GROUP_SIZE;i++){
 				sprintf(header, "0%5d%2d", imageID, sliceID);
 				sliceID = (sliceID+1)%GROUP_SIZE;
 				int sliceWidth = 200 / GROUP_SIZE;
-				Mat slice = frame(Rect(i*sliceWidth, 0, sliceWidth, 200));
+				Mat slice = frame(Rect(i*sliceWidth, 0, sliceWidth, 100));
 				if(!imencode(".jpg", slice, imageVec, compression_params)) printf("Write error\n");
 				imageSize[i] = imageVec.size();
 				pos[i] = i==0?0:pos[i-1]+imageSize[i-1];

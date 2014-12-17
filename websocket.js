@@ -1,6 +1,6 @@
 			var sliceReceived = new Array();
 			var startStream = document.getElementById('startStream');
-			startStream.onclick = WebSockets;
+			startStream.onclick = WebSockets;			
 
 			var address;
 			
@@ -14,6 +14,7 @@
 			}	
 
             function WebSockets() {
+            	startStream.disabled = true;
                 if ("WebSocket" in window) {
                 	window.WebSocket = window.WebSocket || window.MozWebSocket;
                     var ws = new WebSocket("ws://localhost:7681/websocket", "callback_video_transfer");

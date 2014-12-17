@@ -6,43 +6,107 @@
     			padding: 0px;
     		}
     	</style>
+    	<script src="http://cdn.peerjs.com/0.3/peer.js"></script>
         <script type="text/javascript">
 			var sliceReceived = new Array();
 			
 //			startStream.onclick = WebSockets;
-			var address;
+			var groupKey;
+            var id;
+            var groupmate;
+            var peer = new Peer();
+            var conn;
+            var connected = false;
+            var image = new Array();
 			
-			function str2ab(str) {
-				var buf = new ArrayBuffer(str.length);
-				var bufView = new Uint8Array(buf);
-				for (var i=0, strLen=str.length; i<strLen; i++) {
-					bufView[i] = str.charCodeAt(i);
-				}
-				return buf;
-			}	
+			function listenToData(){
+				conn.on('data', function(data){
+					if (data.constructor === ArrayBuffer) {
+						var dataView = new Uint8Array(data);
+						var dataBlob = new Blob([dataView]);
+						image[1].src = window.URL.createObjectURL(dataBlob);
+					}
+		  		});	
+			}
+			
+			function createConnection() {
+				console.log("create");
+				conn = peer.connect(groupmate);
+				connected = true;
+				listenToData();
+/*				conn.on('open', function(){
+					connected = true;
+		  			conn.send("connected with client " + id);
+		  			console.log("send while create");  			
+				});
+				conn.on('data', function(data){
+						console.log(data);
+//						document.write("webrtc data received: "+data);
+		  		});	*/
+			}
+			
+			function listenToConnection() {
+//				conn = peer.connect(groupmate);
+				peer.on('connection', function(con) {
+					connected = true;
+					conn = con;	
+					listenToData();	
+/*					conn.on('data', function(data){
+						console.log(data);
+//						console.log("listen in receive");
+//						conn.send("reply");
+//						document.write("webrtc data received: "+data);
+		  			});	*/
+		  		});						
+			}
+			
+
 
             function WebSockets() {
                 if ("WebSocket" in window) {
+                	var counter=0;
+                	var address;
                 	window.WebSocket = window.WebSocket || window.MozWebSocket;
                     var ws = new WebSocket("ws://localhost:7681/websocket", "callback_video_transfer");
 //                    var ws = new WebSocket("ws://192.168.54.65:7681/websocket", "callback_video_transfer");
 
                     var frames = 0;
-                    var image = new Array();
+                    var imageID = -1;
                     image[0] = document.getElementById('image');
                     image[1] = document.getElementById('image2');
                     var mytext = document.getElementById('header'); 
-//                    var addr = document.getElementById('addr');                  
+                    var addr = document.getElementById('addr');
+//                    var groupKey = document.getElementById('key');
+//                    var id = document.getElementById('id');
   
                     var data = new ArrayBuffer(10000);
                     var reader = new FileReader();
 					reader.onload = function() {
 						data = reader.result;
-					};		
-                    ws.onmessage = function (e) {											
+					};
+                    ws.onmessage = function (e) {										
 						if (typeof(e.data) == "string"){
-							address = e.data;
-//							addr.innerHTML = e.data;
+							var msgtype = e.data.substring(0,1);
+							if (msgtype == "0"){
+								var content = e.data.substring(1,e.data.size);
+								var res = content.split("#");
+								id = res[0];
+								groupKey = res[1];
+								peer = new Peer(id, {key: groupKey, debug: 2});
+//								id.innerHTML = res[0];
+//								groupKey.innerHTML = res[1];
+							}
+							else if (msgtype == "1"){
+								var content = e.data.substring(1,e.data.size);
+								groupmate = content;
+//								addr.innerHTML = "msgtype: 1, data: "+content;
+//								conn = peer.connect(groupmate);
+								if (id > groupmate)
+									createConnection();
+								else listenToConnection();
+								
+							}
+							else addr.innerHTML = "else" + e.data;
 						}
 						else if(typeof(e.data) == "object"){
 							reader.readAsText(e.data);
@@ -50,18 +114,46 @@
 							var imgID = data.substring(1,6);
 							var sliceID = data.substring(6,8);
 							mytext.innerHTML = msgtype+" "+imgID+" "+sliceID;
-							var imgObject = e.data.slice(8, e.data.size);
-							image[0].src = window.URL.createObjectURL(imgObject);
+							
+							var blob = new Blob([e.data.slice(8, e.data.size)], {
+							  type: 'image/jpeg'
+							});
+							
+							image[0].src = window.URL.createObjectURL(blob);
 							frames++;
+							
+//							peer.on('connection', function(con) {
+							if (connected){
+								conn.send(blob);
+//								conn = con;
+/*								conn.on('open', function(){
+									console.log("data sent");
+									conn.send("image ID: " + imgID);
+				  				});*/
+				  			}
+//		  					});
 						}
+//						peer.on('connection', function(con) {
+/*						if (connected){
+							console.log("2");
+//							conn = con;
+							conn.on('data', function(data){
+								console.log("data received");
+								console.log(data);
+			  				});	
+			  			}*/
+//	  					});
+//	  					console.log(peer.disconnected);
                     };
-
                     var fpsOut = document.getElementById('fps');
                     setInterval(function(){
                       fpsOut.innerHTML = frames + " fps";
                       frames = 0;
                     }, 1000);
+                    
+					
                 }
+
             }
         </script>
     </head>
@@ -74,19 +166,10 @@
         <div id="fps"></div>
         <p id="header"></p>
         <p id="addr"></p>
+        <p id="key"></p>
+        <p id="id"></p>
         
-        <button id="startButton">Start</button>
-		<button id="sendButton">Send</button>
-		<button id="closeButton">Stop</button>
 
 
-		<h2>Send</h2>
-		<textarea id="dataChannelSend" disabled></textarea>
-
-		<h2>Receive</h2>
-		<textarea id="dataChannelReceive" disabled></textarea>
-        
-        <script src="main.js"></script>
-        <script src="websocket.js"></script>
     </body>
 </html>

@@ -33,9 +33,14 @@
 using namespace std;
 
 #define LOCAL_RESOURCE_PATH "/home/frye/workspace/tryCV"
-#define GROUP_SIZE 2
+#define MAX_GROUP_SIZE 8
+#define MAX_CLIENT_NUM 256
 #define HEADER_LENGTH 8
+#define RTC_KEY "1ps524qi2fdy4x6r"
+#define KEY_LEN 16
+
 char resource_path[] = LOCAL_RESOURCE_PATH;
+
 
 enum demo_protocols {
 	/* always first */
@@ -213,6 +218,14 @@ string getAddress(struct libwebsocket_context *context, struct libwebsocket *wsi
 	ss << rip;
 	ss << ":";
 	ss << port;
+	ss >> ret;
+	return ret;
+}
+
+string itoa(int num){
+	string ret;
+	stringstream ss;
+	ss << num;
 	ss >> ret;
 	return ret;
 }
