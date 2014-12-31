@@ -227,6 +227,8 @@ callback_video_transfer(struct libwebsocket_context *context,
 		break;
 
 	case LWS_CALLBACK_RECEIVE:
+//		cout<<libwebsockets_remaining_packet_payload(wsi)<<endl;
+		cout << (const char *)in << endl;
 		break;
 	/*
 	 * this just demonstrates how to use the protocol filter. If you won't

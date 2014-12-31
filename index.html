@@ -18,14 +18,20 @@
             var conn;
             var connected = false;
             var image = new Array();
+            
+			var buff = new ArrayBuffer(8);
+			var reader = new FileReader();
+			reader.onload = function() {
+				buff = reader.result;
+			};
 			
 			function listenToData(){
-				conn.on('data', function(data){
+					conn.on('data', function(data){
 					if (data.constructor === ArrayBuffer) {
-						var dataView = new Uint8Array(data);
-						var dataBlob = new Blob([dataView]);
-						image[1].src = window.URL.createObjectURL(dataBlob);
+						var dataBlob = new Blob([data]);
+						displayImage(dataBlob);
 					}
+//					displayImage(data);
 		  		});	
 			}
 			
@@ -34,32 +40,26 @@
 				conn = peer.connect(groupmate);
 				connected = true;
 				listenToData();
-/*				conn.on('open', function(){
-					connected = true;
-		  			conn.send("connected with client " + id);
-		  			console.log("send while create");  			
-				});
-				conn.on('data', function(data){
-						console.log(data);
-//						document.write("webrtc data received: "+data);
-		  		});	*/
 			}
 			
 			function listenToConnection() {
-//				conn = peer.connect(groupmate);
 				peer.on('connection', function(con) {
 					connected = true;
 					conn = con;	
 					listenToData();	
-/*					conn.on('data', function(data){
-						console.log(data);
-//						console.log("listen in receive");
-//						conn.send("reply");
-//						document.write("webrtc data received: "+data);
-		  			});	*/
 		  		});						
 			}
 			
+			function displayImage(data) {
+				var dataBlob = new Blob([data.slice(8, data.size)], {type: 'image/jpeg'});
+
+				reader.readAsText(data.slice(0,8));
+				var msgtype = buff.substring(0,1);
+				var imgID =  buff.substring(1,6);
+				var sliceID =  parseInt(buff.substring(6,8));
+				image[1-sliceID].src = window.URL.createObjectURL(dataBlob);
+//				console.log(buff.substring(0,1));
+			}
 
 
             function WebSockets() {
@@ -69,21 +69,18 @@
                 	window.WebSocket = window.WebSocket || window.MozWebSocket;
                     var ws = new WebSocket("ws://localhost:7681/websocket", "callback_video_transfer");
 //                    var ws = new WebSocket("ws://192.168.54.65:7681/websocket", "callback_video_transfer");
-
+	
                     var frames = 0;
-                    var imageID = -1;
+                    var imageID = -1;    
+                    ws.onopen = function(){
+                    	var msg = "hello world~~~~~~~~~~~~~~~~~~~~~~~~~";
+                    	ws.send(msg);
+                    };           
                     image[0] = document.getElementById('image');
                     image[1] = document.getElementById('image2');
                     var mytext = document.getElementById('header'); 
                     var addr = document.getElementById('addr');
-//                    var groupKey = document.getElementById('key');
-//                    var id = document.getElementById('id');
-  
-                    var data = new ArrayBuffer(10000);
-                    var reader = new FileReader();
-					reader.onload = function() {
-						data = reader.result;
-					};
+
                     ws.onmessage = function (e) {										
 						if (typeof(e.data) == "string"){
 							var msgtype = e.data.substring(0,1);
@@ -99,8 +96,6 @@
 							else if (msgtype == "1"){
 								var content = e.data.substring(1,e.data.size);
 								groupmate = content;
-//								addr.innerHTML = "msgtype: 1, data: "+content;
-//								conn = peer.connect(groupmate);
 								if (id > groupmate)
 									createConnection();
 								else listenToConnection();
@@ -109,41 +104,12 @@
 							else addr.innerHTML = "else" + e.data;
 						}
 						else if(typeof(e.data) == "object"){
-							reader.readAsText(e.data);
-							var msgtype = data.substring(0,1);
-							var imgID = data.substring(1,6);
-							var sliceID = data.substring(6,8);
-							mytext.innerHTML = msgtype+" "+imgID+" "+sliceID;
-							
-							var blob = new Blob([e.data.slice(8, e.data.size)], {
-							  type: 'image/jpeg'
-							});
-							
-							image[0].src = window.URL.createObjectURL(blob);
+							displayImage(e.data);
 							frames++;
 							
-//							peer.on('connection', function(con) {
-							if (connected){
-								conn.send(blob);
-//								conn = con;
-/*								conn.on('open', function(){
-									console.log("data sent");
-									conn.send("image ID: " + imgID);
-				  				});*/
-				  			}
-//		  					});
+							if (connected && conn.open)
+								conn.send(e.data);
 						}
-//						peer.on('connection', function(con) {
-/*						if (connected){
-							console.log("2");
-//							conn = con;
-							conn.on('data', function(data){
-								console.log("data received");
-								console.log(data);
-			  				});	
-			  			}*/
-//	  					});
-//	  					console.log(peer.disconnected);
                     };
                     var fpsOut = document.getElementById('fps');
                     setInterval(function(){

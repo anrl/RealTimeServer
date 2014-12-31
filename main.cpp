@@ -40,7 +40,7 @@ static struct libwebsocket_protocols protocols[] = {
 		"callback_video_transfer",
 		callback_video_transfer,
 		sizeof(struct per_session_data__dumb_increment),
-		10,
+		100,
 	},
 	{ NULL, NULL, 0, 0 } /* terminator */
 };
@@ -162,7 +162,7 @@ int main(int argc, char **argv)
 	}*/
 //		Using video streaming
 	int imageID = 0;
-	int sliceID = 0;
+//	int sliceID = 0;
 	char *header = new char[HEADER_LENGTH];
 	VideoCapture camera;
 	vector<uchar> imageVec;
@@ -212,8 +212,8 @@ int main(int argc, char **argv)
 			camera>>frame;
 			GROUP_SIZE = n>MAX_GROUP_SIZE?MAX_GROUP_SIZE:n;
 			for(int i=0;i<GROUP_SIZE;i++){
-				sprintf(header, "0%5d%2d", imageID, sliceID);
-				sliceID = (sliceID+1)%GROUP_SIZE;
+				sprintf(header, "0%5d%2d", imageID, i);
+//				sliceID = (sliceID+1)%GROUP_SIZE;
 				int sliceWidth = 200 / GROUP_SIZE;
 				Mat slice = frame(Rect(i*sliceWidth, 0, sliceWidth, 100));
 				if(!imencode(".jpg", slice, imageVec, compression_params)) printf("Write error\n");
