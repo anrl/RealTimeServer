@@ -25,6 +25,7 @@
 #include <sstream>
 #include <cstdlib>
 #include <vector>
+#include <queue>
 #include <set>
 
 #include "libwebsockets.h"
@@ -160,15 +161,6 @@ struct per_session_data__dumb_increment {
 
 #define MAX_MESSAGE_QUEUE 32
 
-struct per_session_data__lws_mirror {
-	struct libwebsocket *wsi;
-	int ringbuffer_tail;
-};
-
-struct a_message {
-	void *payload;
-	size_t len;
-};
 
 unsigned int getPort(struct libwebsocket_context *context,
 	struct libwebsocket *wsi, int fd)
@@ -229,5 +221,35 @@ string itoa(int num){
 	ss >> ret;
 	return ret;
 }
+
+template <typename T>
+void printVector(vector<T> v){
+	for(unsigned int i=0;i<v.size();i++){
+		cout<<v[i]<<" ";
+	}
+	cout<<endl;
+}
+
+template <typename T>
+void printVecVector(vector<vector<T> > v){
+	for(unsigned int i=0;i<v.size();i++) printVector(v[i]);
+}
+
+struct UserData{
+	string ip;
+	string id;
+	int groupNo;
+	queue<int> peerToConnect;
+	int mode;
+	UserData():groupNo(0), mode(0) {}
+};
+
+
+enum groupManage{
+	GROUP_INCREMENT = 1,
+	GROUP_CREATE,
+	GROUP_DELETE,
+	GROUP_OVERWRITE
+};
 
 #endif /* SERVER_H_ */

@@ -26,8 +26,13 @@
 //#define FILENAME "picture.png"
 //#define MIMETYPE "image/png"
 
-#define FILENAME "index.html"
-#define MIMETYPE "text/html"
+#define INDEX "index.html"
+
+const char *getType(const char *url){
+	const char * ptr = url;
+	while (*ptr!='.' && *ptr!=' ') ptr++;
+	return ++ptr;
+}
 
 static int
 answer_to_connection (void *cls, struct MHD_Connection *connection,
@@ -42,8 +47,11 @@ answer_to_connection (void *cls, struct MHD_Connection *connection,
 
   if (0 != strcmp (method, "GET"))
     return MHD_NO;
+//  cout << url << endl;
+  const char* filename= strcmp(url, "/")?url+1:INDEX;
+//  cout << "filename: " << filename << endl;
 
-  if ( (-1 == (fd = open (FILENAME, O_RDONLY))) ||
+  if ( (-1 == (fd = open (filename, O_RDONLY))) ||
        (0 != fstat (fd, &sbuf)) )
     {
       /* error accessing file */
@@ -65,7 +73,8 @@ answer_to_connection (void *cls, struct MHD_Connection *connection,
         return MHD_NO;
     }
   response = MHD_create_response_from_fd_at_offset (sbuf.st_size, fd, 0);
-  MHD_add_response_header (response, "Content-Type", MIMETYPE);
+  if (strcmp (getType(url), "js")==0) MHD_add_response_header (response, "Content-Type", "text/javascript");
+  else MHD_add_response_header (response, "Content-Type", "text/html");
   ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
   MHD_destroy_response (response);
 
