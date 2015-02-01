@@ -8,82 +8,12 @@
     		}
     	</style>
     	<script src="http://cdn.peerjs.com/0.3/peer.js"></script>
-        <script type="text/javascript">
-
-
-            function WebSockets() {
-                if ("WebSocket" in window) {
-                	var counter=0;
-                	var address;
-                	window.WebSocket = window.WebSocket || window.MozWebSocket;
-                    var ws = new WebSocket("ws://localhost:7681/websocket", "callback_video_transfer");
-//                    var ws = new WebSocket("ws://192.168.54.65:7681/websocket", "callback_video_transfer");
-	
-                    var frames = 0;
-                    var imageID = -1;
-                    image[0] = document.createElement("img");
-                    document.body.appendChild(image[0]);
-                    image[1] = document.createElement("img");
-                    document.body.appendChild(image[1]);
-//                    image[0] = document.getElementById('image');
-//                    image[1] = document.getElementById('image2');
-                    var mytext = document.getElementById('header'); 
-                    var addr = document.getElementById('addr');
-
-                    ws.onmessage = function (e) {										
-						if (typeof(e.data) == "string"){
-							var msgtype = e.data.substring(0,1);
-							//msgtype = 0, key received and create a peer
-							if (msgtype == "0"){
-/*								var content = e.data.substring(1,e.data.size);
-								var res = content.split("#");
-								id = res[0];
-								groupKey = res[1];*/
-								groupKey = e.data.substring(1,e.data.size);
-								peer = new Peer({key: groupKey, debug: 2});
-								peer.on('open', function(myid) {
-									id = myid;
-									ws.send("0"+id);
-								});
-//								id.innerHTML = res[0];
-//								groupKey.innerHTML = res[1];
-							}
-							//msgtype = 1, create connection with a peer
-							else if (msgtype == "1"){
-								var content = e.data.substring(1,e.data.size);
-								groupmate = content;
-								if (id > groupmate)
-									createConnection();
-								else listenToConnection();
-								
-							}
-							else addr.innerHTML = "else" + e.data;
-						}
-						else if(typeof(e.data) == "object"){
-							displayImage(e.data);
-							frames++;
-							
-							if (connected && conn.open)
-								conn.send(e.data);
-						}
-                    };
-                    var fpsOut = document.getElementById('fps');
-                    setInterval(function(){
-                      fpsOut.innerHTML = frames + " fps";
-                      frames = 0;
-                    }, 1000);
-                    
-					
-                }
-
-            }
-        </script>
+    	<script type="text/javascript" src="websocket.js"></script>
     </head>
 
 	<body>
-        <a href="javascript:WebSockets()">Start stream</a>
-        <button id="startStream">startStream</button>
-        <button type="button" onclick="myFunction()">Try it</button>
+<!--    <a href="javascript:WebSockets()">Start stream</a> -->
+        <button id="startButton" onclick = "WebSockets(this)">Start</button>
 <!--        <img id="image">
         <img id="image2">-->
 
@@ -92,7 +22,6 @@
         <p id="addr"></p>
         <p id="key"></p>
         <p id="id"></p>
-        <script type="text/javascript" src="test.js"></script>
 
 	</body>
 </html>
