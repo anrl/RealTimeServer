@@ -1,8 +1,5 @@
-var sliceReceived = new Array();
-
-function myFunction(){
-	console.log("hello");
-}
+var ReceiveBuffer = new Array();
+var IMG_NUM = 8;
 
 var groupKey;
 var id;
@@ -11,12 +8,6 @@ var peer = new Peer();
 var conn;
 var connected = false;
 var image = new Array();
-
-var buff = new ArrayBuffer(8);
-var reader = new FileReader();
-reader.onload = function() {
-	buff = reader.result;
-};
 			
 function listenToData(){
 	conn.on('data', function(data){
@@ -51,12 +42,16 @@ function listenToConnection() {
 			
 function displayImage(data) {
 	var dataBlob = new Blob([data.slice(8, data.size)], {type: 'image/jpeg'});
-
+	var reader = new FileReader();
+	var temp = new ArrayBuffer(8);
+	reader.onload = function() {
+		temp = reader.result;
+		var msgtype = temp.substring(0,1);
+		var imgID =  temp.substring(1,6);
+		var sliceID =  parseInt(temp.substring(6,8));
+		ReceiveBuffer[sliceID] = window.URL.createObjectURL(dataBlob);
+	};
 	reader.readAsText(data.slice(0,8));
-	var msgtype = buff.substring(0,1);
-	var imgID =  buff.substring(1,6);
-	var sliceID =  parseInt(buff.substring(6,8));
-	image[sliceID].src = window.URL.createObjectURL(dataBlob);
 }
 
 function WebSockets(button) {
@@ -70,24 +65,22 @@ function WebSockets(button) {
 	
 		var frames = 0;
 		var imageID = -1;
-		image[0] = document.createElement("img");
-		document.body.appendChild(image[0]);
-		image[1] = document.createElement("img");
-		document.body.appendChild(image[1]);
-//		image[0] = document.getElementById('image');
-//		image[1] = document.getElementById('image2');
-		var mytext = document.getElementById('header'); 
-		var addr = document.getElementById('addr');
+		for(var i=0;i<IMG_NUM;i++){
+			image[i] = document.createElement("img");
+			image[i].width = 60;
+			document.body.appendChild(image[i]);
+		}
+		var mytext = document.getElementById('mytext'); 
 
 		ws.onmessage = function (e) {										
 			if (typeof(e.data) == "string"){
 				var msgtype = e.data.substring(0,1);
 				//msgtype = 0, key received and create a peer
 				if (msgtype == "0"){
-/*				var content = e.data.substring(1,e.data.size);
-				var res = content.split("#");
-				id = res[0];
-				groupKey = res[1];*/
+/*					var content = e.data.substring(1,e.data.size);
+					var res = content.split("#");
+					id = res[0];
+					groupKey = res[1];*/
 					groupKey = e.data.substring(1,e.data.size);
 					peer = new Peer({key: groupKey, debug: 2});
 					peer.on('open', function(myid) {
@@ -105,7 +98,7 @@ function WebSockets(button) {
 						createConnection();
 					else listenToConnection();				
 				}
-				else addr.innerHTML = "else" + e.data;
+				else mytext.innerHTML = "text: " + e.data;
 			}
 			else if(typeof(e.data) == "object"){
 				displayImage(e.data);
@@ -119,6 +112,13 @@ function WebSockets(button) {
 		setInterval(function(){
 		  fpsOut.innerHTML = frames + " fps";
 		  frames = 0;
-		}, 1000);						
+		}, 1000);
+		
+		setInterval(function(){
+			for(var i=0;i<IMG_NUM;i++){
+				image[i].src = ReceiveBuffer[i];
+			}
+			
+		}, 100);	
     }
 }

@@ -17,7 +17,7 @@
 //map<int, string> fdtoid;
 //int *groupMode = new int[MAX_CLIENT_NUM];
 
-map<int, UserData> UserTable;
+map<int, Peer> PeerTable;
 set<int> livefd;
 vector<vector<int> > groupTable;
 //map<int, vector<int>> groupTable;
@@ -27,9 +27,11 @@ unsigned char* textBuf = new unsigned char[10000];
 int buffSize;
 int GROUP_SIZE = 1;
 int GROUP_NUM = 0;
-int *pos = new int[MAX_GROUP_SIZE];
-int *imageSize = new int[MAX_GROUP_SIZE];
+int *pos = new int[PIECE_NUM];
+int *imageSize = new int[PIECE_NUM];
 pthread_mutex_t mutexbuf;
+
+struct timespec currentTime;
 
 void manageGroup(int type, int fd){
 //type = GROUP_INCREMENT, new peer joins
@@ -38,18 +40,18 @@ void manageGroup(int type, int fd){
 		if (groupTable.empty() || (int)livefd.size() == GROUP_NUM*MAX_GROUP_SIZE) {
 			vector<int> thisGroup;
 			thisGroup.push_back(fd);
-			UserTable[fd].groupNo = GROUP_NUM;
+			PeerTable[fd].groupNo = GROUP_NUM;
 			GROUP_NUM ++;
 			groupTable.push_back(thisGroup);
 		}
 		else{
 			for(int i=0;i<(int)groupTable[GROUP_NUM-1].size();i++){
 				int peer = groupTable[GROUP_NUM-1][i];
-				UserTable[peer].mode = GROUP_INCREMENT;
-				UserTable[peer].peerToConnect.push(fd);
-//				UserTable[fd].peerToConnect.push(peer);
+				PeerTable[peer].mode = GROUP_INCREMENT;
+				PeerTable[peer].peerToConnect.push(fd);
+//				PeerTable[fd].peerToConnect.push(peer);
 			}
-			UserTable[fd].mode = GROUP_CREATE;
+			PeerTable[fd].mode = GROUP_CREATE;
 			groupTable[GROUP_NUM-1].push_back(fd);
 		}
 	}
@@ -64,7 +66,7 @@ int makeTextPacket(int type, int fd){
 		for(set<int>::iterator it=livefd.begin();it!=livefd.end();++it){
 			if (*it!=fd){
 				string packet = "1";
-				packet = packet + UserTable[*it].id + "#";
+				packet = packet + PeerTable[*it].id + "#";
 //				packet = packet + fdtoid[*it] + "#";
 //				cout<<*it<<" "<<fdtoid[*it]<<endl;
 				memcpy(textBuf, packet.c_str(), packet.size());
@@ -103,7 +105,7 @@ callback_video_transfer(struct libwebsocket_context *context,
 	int length;
 	string packet;
 	const char * rcvData;
-
+	unsigned long long timeInterval;
 
 //	int id;
 
@@ -115,8 +117,8 @@ callback_video_transfer(struct libwebsocket_context *context,
 //		videoTransfer(context, wsi);
 //		imageTransfer(context, wsi);
 		addr = getAddress(context, wsi);
-		UserTable[wsi->sock] = UserData();
-		UserTable[wsi->sock].ip = addr;
+		PeerTable[wsi->sock] = Peer();
+		PeerTable[wsi->sock].ip = addr;
 //		fdtoip[wsi->sock] = addr;
 		packet = "0" + string(RTC_KEY);
 //		packet = "0" + itoa(wsi->sock) + "#" + RTC_KEY;
@@ -125,22 +127,33 @@ callback_video_transfer(struct libwebsocket_context *context,
 		break;
 
 	case LWS_CALLBACK_SERVER_WRITEABLE:
-//		memcpy(textBuf, addr.c_str(), addr.size());
-//		libwebsocket_write(wsi, textBuf, addr.size(), LWS_WRITE_TEXT);
+//		clock_gettime(CLOCK_MONOTONIC, &time1);
+//		cout << "time: " << timespecDiff(&time1, &time2)/1000000 << endl;
+//		clock_gettime(CLOCK_MONOTONIC, &time2);
+//		memcpy(textBuf, PeerTable[wsi->sock].ip.c_str(), PeerTable[wsi->sock].ip.size());
+//		libwebsocket_write(wsi, textBuf, PeerTable[wsi->sock].ip.size(), LWS_WRITE_TEXT);
 //		if (groupMode[wsi->sock] == GROUP_OVERWRITE){
-		if (UserTable[wsi->sock].mode == GROUP_INCREMENT
-				|| UserTable[wsi->sock].mode == GROUP_CREATE){
+		if (PeerTable[wsi->sock].mode == GROUP_INCREMENT
+				|| PeerTable[wsi->sock].mode == GROUP_CREATE){
 			length = makeTextPacket(1, wsi->sock);
 			if (length) libwebsocket_write(wsi, textBuf, length, LWS_WRITE_TEXT);
-			if (!UserTable[wsi->sock].peerToConnect.empty()) UserTable[wsi->sock].peerToConnect.pop();
-			if (UserTable[wsi->sock].peerToConnect.empty()) UserTable[wsi->sock].mode = 0;
+			if (!PeerTable[wsi->sock].peerToConnect.empty()) PeerTable[wsi->sock].peerToConnect.pop();
+			if (PeerTable[wsi->sock].peerToConnect.empty()) PeerTable[wsi->sock].mode = 0;
 		}
 
 
 //		libwebsocket_write(wsi, &buf[LWS_SEND_BUFFER_PRE_PADDING], 101, LWS_WRITE_TEXT);
 //		libwebsocket_write(wsi, &imageBuf[LWS_SEND_BUFFER_PRE_PADDING], buffSize, LWS_WRITE_BINARY);
 //		cout<<"transfer size "<<libwebsocket_write(wsi, imageBuf, buffSize, LWS_WRITE_BINARY)<<endl;
-		libwebsocket_write(wsi, &imageBuf[pos[wsi->sock%GROUP_SIZE]], imageSize[wsi->sock%GROUP_SIZE], LWS_WRITE_BINARY);
+		for(int i=0;i<PIECE_NUM;i++){
+			clock_gettime(CLOCK_MONOTONIC, &currentTime);
+			timeInterval = timespecDiff(&currentTime, &PeerTable[wsi->sock].lastSend)/1000;
+			if (timeInterval < WAIT_TIME) usleep(WAIT_TIME - timeInterval);
+			//in order not to overwhelm client
+			while (lws_send_pipe_choked(wsi)) {}	//in order not to overwhelm server
+			libwebsocket_write(wsi, &imageBuf[pos[i]], imageSize[i], LWS_WRITE_BINARY);
+			clock_gettime(CLOCK_MONOTONIC, &PeerTable[wsi->sock].lastSend);
+		}
 
 		break;
 
@@ -150,7 +163,7 @@ callback_video_transfer(struct libwebsocket_context *context,
 		//receive client id
 		case '0':
 //			fdtoid[wsi->sock] = rcvData+1;
-			UserTable[wsi->sock].id = rcvData+1;
+			PeerTable[wsi->sock].id = rcvData+1;
 			cout<<wsi->sock<<" id: "<<rcvData<<endl;
 			livefd.insert(wsi->sock);
 			manageGroup(GROUP_INCREMENT, wsi->sock);
@@ -164,7 +177,7 @@ callback_video_transfer(struct libwebsocket_context *context,
 		break;
 
 	case LWS_CALLBACK_CLOSED:
-		UserTable.erase(wsi->sock);
+		PeerTable.erase(wsi->sock);
 		manageGroup(GROUP_DELETE, wsi->sock);
 //		fdtoip.erase(wsi->sock);
 		livefd.erase(wsi->sock);

@@ -39,6 +39,8 @@ using namespace std;
 #define HEADER_LENGTH 8
 #define RTC_KEY "1ps524qi2fdy4x6r"
 #define KEY_LEN 16
+#define PIECE_NUM 8
+#define WAIT_TIME 0
 
 char resource_path[] = LOCAL_RESOURCE_PATH;
 
@@ -235,13 +237,17 @@ void printVecVector(vector<vector<T> > v){
 	for(unsigned int i=0;i<v.size();i++) printVector(v[i]);
 }
 
-struct UserData{
+struct Peer{
 	string ip;
 	string id;
 	int groupNo;
 	queue<int> peerToConnect;
 	int mode;
-	UserData():groupNo(0), mode(0) {}
+	Peer():groupNo(0), mode(0) {
+		for(int i=0;i<PIECE_NUM;i++) pieceID.push_back(i);
+	}
+	vector<int> pieceID;
+	struct timespec lastSend;
 };
 
 

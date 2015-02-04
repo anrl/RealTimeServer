@@ -210,18 +210,19 @@ int main(int argc, char **argv)
 			imageID = (imageID+1)%100000;
  			Mat frame;
 			camera>>frame;
-			GROUP_SIZE = n>MAX_GROUP_SIZE?MAX_GROUP_SIZE:n;
-			for(int i=0;i<GROUP_SIZE;i++){
+//			GROUP_SIZE = n>MAX_GROUP_SIZE?MAX_GROUP_SIZE:n;
+			for(int i=0;i<PIECE_NUM;i++){
 				sprintf(header, "0%5d%2d", imageID, i);
 //				sliceID = (sliceID+1)%GROUP_SIZE;
-				int sliceWidth = 200 / GROUP_SIZE;
-				Mat slice = frame(Rect(i*sliceWidth, 0, sliceWidth, 100));
+				int sliceWidth = 480 / PIECE_NUM;
+				Mat slice = frame(Rect(i*sliceWidth, 0, sliceWidth, 400));
 				if(!imencode(".jpg", slice, imageVec, compression_params)) printf("Write error\n");
 				imageSize[i] = imageVec.size();
 				pos[i] = i==0?0:pos[i-1]+imageSize[i-1];
 				memcpy(&imageBuf[pos[i]], header, HEADER_LENGTH);
 				memcpy(&imageBuf[pos[i]+HEADER_LENGTH], imageVec.data(), imageSize[i]);
 				imageSize[i] += HEADER_LENGTH;
+//				cout << i << " " << pos[i] << " " << imageSize[i] << endl;
 			}
 /*			frame = frame(Rect(0,0,200,200));
 			if(!imencode(".jpg", frame, imageVec, compression_params)) printf("Write error\n");
