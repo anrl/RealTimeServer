@@ -18,7 +18,6 @@ int count_pollfds;
 extern unsigned char* imageBuf;
 extern int *pos;
 extern int *imageSize;
-extern int GROUP_SIZE;
 
 static volatile int force_exit = 0;
 static struct libwebsocket_context *context;
@@ -39,7 +38,7 @@ static struct libwebsocket_protocols protocols[] = {
 	{
 		"callback_video_transfer",
 		callback_video_transfer,
-		sizeof(struct per_session_data__dumb_increment),
+		0,
 		100,
 	},
 	{ NULL, NULL, 0, 0 } /* terminator */

@@ -154,13 +154,6 @@ const char * get_mimetype(const char *file)
 	return NULL;
 }
 
-struct per_session_data__dumb_increment {
-	int number;
-};
-
-
-/* lws-mirror_protocol */
-
 #define MAX_MESSAGE_QUEUE 32
 
 
@@ -202,6 +195,12 @@ bail:
 	return sin4.sin_port;
 }
 
+bool groupIsEmpty(vector<int> group){
+	for(unsigned int i=0;i<group.size();i++)
+		if (group[i]!=-1) return false;
+	return true;
+}
+
 string getAddress(struct libwebsocket_context *context, struct libwebsocket *wsi){
 	char *name = new char[100];
 	char *rip = new char[100];
@@ -241,19 +240,20 @@ struct Peer{
 	string ip;
 	string id;
 	int groupNo;
-	queue<int> peerToConnect;
+	int groupPos;
 	int mode;
-	Peer():groupNo(0), mode(0) {
+	queue<int> peerToConnect;
+	Peer():groupNo(0), mode(0), groupPos(0) {
 		for(int i=0;i<PIECE_NUM;i++) pieceID.push_back(i);
 	}
 	vector<int> pieceID;
-	struct timespec lastSend;
+//	struct timespec lastSend;
 };
 
 
 enum groupManage{
 	GROUP_INCREMENT = 1,
-	GROUP_CREATE,
+	GROUP_CREATE, //may be useless
 	GROUP_DELETE,
 	GROUP_OVERWRITE
 };

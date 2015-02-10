@@ -33,11 +33,30 @@ pthread_mutex_t mutexbuf;
 
 struct timespec currentTime;
 
+void Redistribute(int type, int fd){
+//when a new peer joins the group, redistribute pieces to the new peer
+	Peer p = PeerTable[fd];
+	vector<int> group = groupTable[p.groupNo];
+	int size = group.size();
+	int mid=1, source;
+	for(;mid*2<size;mid*=2) {}
+	if (p.groupPos < mid) source = mid + p.groupPos;
+	else source = p.groupPos - mid;
+	source = groupTable[p.groupNo][source];
+	PeerTable[fd].pieceID.clear();
+	size = PeerTable[source].pieceID.size();
+	for(int j=0;j<size/2;j++){
+		PeerTable[fd].pieceID.push_back(PeerTable[source].pieceID.back());
+		PeerTable[source].pieceID.pop_back();
+	}
+//TODO delete redistribution
+}
+
 void manageGroup(int type, int fd){
 //type = GROUP_INCREMENT, new peer joins
 //Only consider the first group right now
 	if (type==GROUP_INCREMENT){
-		if (groupTable.empty() || (int)livefd.size() == GROUP_NUM*MAX_GROUP_SIZE) {
+		if (groupTable.empty() || (int)livefd.size() == GROUP_NUM*MAX_GROUP_SIZE+1) {
 			vector<int> thisGroup;
 			thisGroup.push_back(fd);
 			PeerTable[fd].groupNo = GROUP_NUM;
@@ -45,24 +64,43 @@ void manageGroup(int type, int fd){
 			groupTable.push_back(thisGroup);
 		}
 		else{
-			for(int i=0;i<(int)groupTable[GROUP_NUM-1].size();i++){
+			int pos = (int)groupTable[GROUP_NUM-1].size();
+			for(int i=0;i<pos;i++){
 				int peer = groupTable[GROUP_NUM-1][i];
-				PeerTable[peer].mode = GROUP_INCREMENT;
-				PeerTable[peer].peerToConnect.push(fd);
-//				PeerTable[fd].peerToConnect.push(peer);
+//				PeerTable[peer].mode = GROUP_INCREMENT;
+//				PeerTable[peer].peerToConnect.push(fd);
+				PeerTable[fd].peerToConnect.push(peer);
 			}
-			PeerTable[fd].mode = GROUP_CREATE;
+			PeerTable[fd].mode = GROUP_INCREMENT;
+			PeerTable[fd].groupNo = GROUP_NUM-1;
+			PeerTable[fd].groupPos = pos;
 			groupTable[GROUP_NUM-1].push_back(fd);
+			Redistribute(type, fd);
 		}
 	}
 //type = GROUP_DELETE, peer left
 	else if (type==GROUP_DELETE){
-
+		int groupNo = PeerTable[fd].groupNo;
+		if (groupTable.empty() || groupTable[groupNo].empty()) {cerr<<"Empty deletion error"<<endl;return;}
+		groupTable[groupNo][PeerTable[fd].groupPos] = -1;
+//Todo:	if (groupIsEmpty(groupTable[groupNo])) server stops transmitting data to this group
+		if (!groupIsEmpty(groupTable[groupNo])) Redistribute(type, fd);
 	}
 }
 
 int makeTextPacket(int type, int fd){
-	if (livefd.size()>1){
+	if (type == GROUP_INCREMENT){
+		string packet = "1";
+		while(!PeerTable[fd].peerToConnect.empty()){
+			int peer = PeerTable[fd].peerToConnect.front();
+			packet = packet + PeerTable[peer].id + "#";
+			PeerTable[fd].peerToConnect.pop();
+		}
+		memcpy(textBuf, packet.c_str(), packet.size());
+		PeerTable[fd].mode = 0;
+		return packet.size()-1;
+	}
+/*	if (livefd.size()>1){
 		for(set<int>::iterator it=livefd.begin();it!=livefd.end();++it){
 			if (*it!=fd){
 				string packet = "1";
@@ -72,24 +110,6 @@ int makeTextPacket(int type, int fd){
 				memcpy(textBuf, packet.c_str(), packet.size());
 				return packet.size()-1;
 			}
-		}
-	}
-/*	int i, j, num=-1;
-	if (type==1){
-		for(i=0;i<(int)groupTable.size();i++)
-			for(j=0;j<(int)groupTable[i].size();j++)
-				if (groupTable[i][j]==fd){
-					num = i;
-					break;
-				}
-		if (num!=-1){
-			string packet = "1";
-			for(int j=0;j<(int)groupTable[num].size();j++)
-				if (groupTable[num][j]!=fd) {
-					packet = packet + itoa(groupTable[num][j]) + "#";
-				}
-			memcpy(textBuf, packet.c_str(), packet.size());
-			return packet.size()-1;
 		}
 	}*/
 	return 0;
@@ -105,7 +125,7 @@ callback_video_transfer(struct libwebsocket_context *context,
 	int length;
 	string packet;
 	const char * rcvData;
-	unsigned long long timeInterval;
+//	unsigned long long timeInterval;
 
 //	int id;
 
@@ -127,32 +147,27 @@ callback_video_transfer(struct libwebsocket_context *context,
 		break;
 
 	case LWS_CALLBACK_SERVER_WRITEABLE:
-//		clock_gettime(CLOCK_MONOTONIC, &time1);
-//		cout << "time: " << timespecDiff(&time1, &time2)/1000000 << endl;
-//		clock_gettime(CLOCK_MONOTONIC, &time2);
 //		memcpy(textBuf, PeerTable[wsi->sock].ip.c_str(), PeerTable[wsi->sock].ip.size());
 //		libwebsocket_write(wsi, textBuf, PeerTable[wsi->sock].ip.size(), LWS_WRITE_TEXT);
 //		if (groupMode[wsi->sock] == GROUP_OVERWRITE){
-		if (PeerTable[wsi->sock].mode == GROUP_INCREMENT
-				|| PeerTable[wsi->sock].mode == GROUP_CREATE){
-			length = makeTextPacket(1, wsi->sock);
+		if (PeerTable[wsi->sock].mode == GROUP_INCREMENT){
+			length = makeTextPacket(GROUP_INCREMENT, wsi->sock);
 			if (length) libwebsocket_write(wsi, textBuf, length, LWS_WRITE_TEXT);
-			if (!PeerTable[wsi->sock].peerToConnect.empty()) PeerTable[wsi->sock].peerToConnect.pop();
-			if (PeerTable[wsi->sock].peerToConnect.empty()) PeerTable[wsi->sock].mode = 0;
 		}
 
 
 //		libwebsocket_write(wsi, &buf[LWS_SEND_BUFFER_PRE_PADDING], 101, LWS_WRITE_TEXT);
 //		libwebsocket_write(wsi, &imageBuf[LWS_SEND_BUFFER_PRE_PADDING], buffSize, LWS_WRITE_BINARY);
 //		cout<<"transfer size "<<libwebsocket_write(wsi, imageBuf, buffSize, LWS_WRITE_BINARY)<<endl;
-		for(int i=0;i<PIECE_NUM;i++){
-			clock_gettime(CLOCK_MONOTONIC, &currentTime);
-			timeInterval = timespecDiff(&currentTime, &PeerTable[wsi->sock].lastSend)/1000;
-			if (timeInterval < WAIT_TIME) usleep(WAIT_TIME - timeInterval);
+		for(unsigned int i=0;i<PeerTable[wsi->sock].pieceID.size();i++){
+			int id = PeerTable[wsi->sock].pieceID[i];
+//			clock_gettime(CLOCK_MONOTONIC, &currentTime);
+//			timeInterval = timespecDiff(&currentTime, &PeerTable[wsi->sock].lastSend)/1000;
+//			if (timeInterval < WAIT_TIME) usleep(WAIT_TIME - timeInterval);
 			//in order not to overwhelm client
 			while (lws_send_pipe_choked(wsi)) {}	//in order not to overwhelm server
-			libwebsocket_write(wsi, &imageBuf[pos[i]], imageSize[i], LWS_WRITE_BINARY);
-			clock_gettime(CLOCK_MONOTONIC, &PeerTable[wsi->sock].lastSend);
+			libwebsocket_write(wsi, &imageBuf[pos[id]], imageSize[id], LWS_WRITE_BINARY);
+//			clock_gettime(CLOCK_MONOTONIC, &PeerTable[wsi->sock].lastSend);
 		}
 
 		break;

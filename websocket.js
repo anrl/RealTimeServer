@@ -1,42 +1,52 @@
 var ReceiveBuffer = new Array();
+var image = new Array();
 var IMG_NUM = 8;
 
 var groupKey;
 var id;
-var groupmate;
 var peer = new Peer();
-var conn;
+var conn = [null, null, null, null, null, null, null, null];
 var connected = false;
-var image = new Array();
-			
-function listenToData(){
-	conn.on('data', function(data){
+
+function findEmptyPeer(){
+	for(i=0;i<conn.length;i++){
+		if (!conn[i]) return i;
+	}
+	return -1;
+}
+
+function listenToData(i){
+	conn[i].on('data', function(data){
 		if (data.constructor === ArrayBuffer) {
 			var dataBlob = new Blob([data]);
 			displayImage(dataBlob);
 		}
  	});	
- 	conn.on('close', function(){
+ 	conn[i].on('close', function(){
  		for(var i=0; i<image.length; i++){
  			image[i].src = null;
 		}
+		conn[i] = null;
 		console.log("disconnect");
 	});
 }
 			
-function createConnection() {
+function createConnection(groupmate) {
 	console.log("create");
-	conn = peer.connect(groupmate);
+	var i = findEmptyPeer();
+	conn[i] = peer.connect(groupmate);
 	connected = true;
-	listenToData();
+	listenToData(i);
 }
 			
 function listenToConnection() {
 	console.log("listen");
 	peer.on('connection', function(con) {
+		console.log("connected");
 		connected = true;
-		conn = con;	
-		listenToData();	
+		var i = findEmptyPeer();
+		conn[i] = con;	
+		listenToData(i);	
 	});
 }
 			
@@ -49,6 +59,7 @@ function displayImage(data) {
 		var msgtype = temp.substring(0,1);
 		var imgID =  temp.substring(1,6);
 		var sliceID =  parseInt(temp.substring(6,8));
+		window.URL.revokeObjectURL(ReceiveBuffer[sliceID]);
 		ReceiveBuffer[sliceID] = window.URL.createObjectURL(dataBlob);
 	};
 	reader.readAsText(data.slice(0,8));
@@ -87,16 +98,18 @@ function WebSockets(button) {
 						id = myid;
 						ws.send("0"+id);
 					});
+					listenToConnection();	
 					//id.innerHTML = res[0];
 					//groupKey.innerHTML = res[1];
 				}
 				//msgtype = 1, create connection with a peer
 				else if (msgtype == "1"){
 					var content = e.data.substring(1,e.data.size);
-					groupmate = content;
-					if (id > groupmate)
-						createConnection();
-					else listenToConnection();				
+					var groupmates = content.split("#");
+					console.log("content: "+groupmates);
+			 		for(var i=0; i<groupmates.length; i++){
+			 			createConnection(groupmates[i]);
+					}				
 				}
 				else mytext.innerHTML = "text: " + e.data;
 			}
@@ -104,8 +117,12 @@ function WebSockets(button) {
 				displayImage(e.data);
 				frames++;
 							
-				if (connected && conn.open)
-					conn.send(e.data);
+				for(var i=0;i<conn.length;i++){
+					if (connected && conn[i]!=null && conn[i].open)
+						conn[i].send(e.data);
+				}
+//				if (connected && conn.open)
+//					conn.send(e.data);
 			}
 		};
 		var fpsOut = document.getElementById('fps');
@@ -117,8 +134,7 @@ function WebSockets(button) {
 		setInterval(function(){
 			for(var i=0;i<IMG_NUM;i++){
 				image[i].src = ReceiveBuffer[i];
-			}
-			
-		}, 100);	
+			}		
+		}, 1000);	
     }
 }
