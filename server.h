@@ -195,11 +195,11 @@ bail:
 	return sin4.sin_port;
 }
 
-bool groupIsEmpty(vector<int> group){
+/*bool groupIsEmpty(vector<int> group){
 	for(unsigned int i=0;i<group.size();i++)
 		if (group[i]!=-1) return false;
 	return true;
-}
+}*/
 
 string getAddress(struct libwebsocket_context *context, struct libwebsocket *wsi){
 	char *name = new char[100];

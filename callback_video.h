@@ -12,69 +12,84 @@
 #include "imageHash.h"
 #include "server.h"
 
-
-//map<int, string> fdtoip;
-//map<int, string> fdtoid;
-//int *groupMode = new int[MAX_CLIENT_NUM];
-
 map<int, Peer> PeerTable;
 set<int> livefd;
 vector<vector<int> > groupTable;
-//map<int, vector<int>> groupTable;
 
 unsigned char* imageBuf = new unsigned char[200000];
 unsigned char* textBuf = new unsigned char[10000];
-int buffSize;
-int GROUP_SIZE = 1;
-int GROUP_NUM = 0;
 int *pos = new int[PIECE_NUM];
 int *imageSize = new int[PIECE_NUM];
-pthread_mutex_t mutexbuf;
 
-struct timespec currentTime;
+//struct timespec currentTime;
+
+int findIndex(int type, vector<int> group, int fd){
+	unsigned int val = MAX_GROUP_SIZE / group.size();
+	for (int i=0;i<(int)group.size();i++){
+		Peer p = PeerTable[group[i]];
+		if (type==GROUP_INCREMENT && p.pieceID.size() == 2*val) return i;
+		if (type==GROUP_DELETE && p.pieceID.size() == val && group[i]!=fd) return i;
+	}
+	return -1;
+}
 
 void Redistribute(int type, int fd){
 //when a new peer joins the group, redistribute pieces to the new peer
 	Peer p = PeerTable[fd];
 	vector<int> group = groupTable[p.groupNo];
-	int size = group.size();
-	int mid=1, source;
-	for(;mid*2<size;mid*=2) {}
-	if (p.groupPos < mid) source = mid + p.groupPos;
-	else source = p.groupPos - mid;
-	source = groupTable[p.groupNo][source];
-	PeerTable[fd].pieceID.clear();
-	size = PeerTable[source].pieceID.size();
-	for(int j=0;j<size/2;j++){
-		PeerTable[fd].pieceID.push_back(PeerTable[source].pieceID.back());
-		PeerTable[source].pieceID.pop_back();
+	int index = findIndex(type, group, fd);
+	int source = groupTable[p.groupNo][index];
+	if (type == GROUP_INCREMENT){
+		PeerTable[fd].pieceID.clear();
+		int size = PeerTable[source].pieceID.size()/2;
+//		cout << "source: "<<index<<" size: "<<PeerTable[source].pieceID.size()/2<<endl;
+		for(int j=0;j<size;j++){
+			PeerTable[fd].pieceID.push_back(PeerTable[source].pieceID.back());
+			PeerTable[source].pieceID.pop_back();
+		}
 	}
-//TODO delete redistribution
+	else if (type == GROUP_DELETE){
+//		cout << "to: "<<index<<" size: "<<PeerTable[fd].pieceID.size()<<endl;
+		int size = PeerTable[fd].pieceID.size();
+		for(int j=0;j<size;j++){
+			PeerTable[source].pieceID.push_back(PeerTable[fd].pieceID.back());
+			PeerTable[fd].pieceID.pop_back();
+		}
+	}
+	for(unsigned int i=0;i<group.size();i++) {
+		printVector(PeerTable[groupTable[p.groupNo][i]].pieceID);
+	}
+}
+
+int findSlot(){
+	for(int i=0;i<groupTable.size();i++)
+		if (groupTable[i].size() != MAX_GROUP_SIZE) return i;
+	return -1;
 }
 
 void manageGroup(int type, int fd){
 //type = GROUP_INCREMENT, new peer joins
 //Only consider the first group right now
+	int groupNo = findSlot();
 	if (type==GROUP_INCREMENT){
-		if (groupTable.empty() || (int)livefd.size() == GROUP_NUM*MAX_GROUP_SIZE+1) {
+		if (groupNo==-1) {
 			vector<int> thisGroup;
 			thisGroup.push_back(fd);
-			PeerTable[fd].groupNo = GROUP_NUM;
-			GROUP_NUM ++;
+			PeerTable[fd].groupNo = groupTable.size();
 			groupTable.push_back(thisGroup);
 		}
 		else{
-			int pos = (int)groupTable[GROUP_NUM-1].size();
+			int pos = (int)groupTable[groupNo].size();
 			for(int i=0;i<pos;i++){
-				int peer = groupTable[GROUP_NUM-1][i];
+				int peer = groupTable[groupNo][i];
 //				PeerTable[peer].mode = GROUP_INCREMENT;
 //				PeerTable[peer].peerToConnect.push(fd);
 				PeerTable[fd].peerToConnect.push(peer);
 			}
 			PeerTable[fd].mode = GROUP_INCREMENT;
-			PeerTable[fd].groupNo = GROUP_NUM-1;
+			PeerTable[fd].groupNo = groupNo;
 			PeerTable[fd].groupPos = pos;
-			groupTable[GROUP_NUM-1].push_back(fd);
+			groupTable[groupNo].push_back(fd);
 			Redistribute(type, fd);
 		}
 	}
@@ -82,9 +97,12 @@ void manageGroup(int type, int fd){
 	else if (type==GROUP_DELETE){
 		int groupNo = PeerTable[fd].groupNo;
 		if (groupTable.empty() || groupTable[groupNo].empty()) {cerr<<"Empty deletion error"<<endl;return;}
-		groupTable[groupNo][PeerTable[fd].groupPos] = -1;
-//Todo:	if (groupIsEmpty(groupTable[groupNo])) server stops transmitting data to this group
-		if (!groupIsEmpty(groupTable[groupNo])) Redistribute(type, fd);
+//		groupTable[groupNo][PeerTable[fd].groupPos] = -1;
+		Redistribute(type, fd);
+		groupTable[groupNo].erase(groupTable[groupNo].begin()+PeerTable[fd].groupPos);
+		if (groupTable[groupNo].empty()) groupTable.erase(groupTable.begin()+groupNo);
+//		cout << "size: "<<groupTable.size() << endl;
+//		if (!groupTable.empty()) cout<<groupTable[groupNo].size()<<endl;
 	}
 }
 
@@ -100,18 +118,6 @@ int makeTextPacket(int type, int fd){
 		PeerTable[fd].mode = 0;
 		return packet.size()-1;
 	}
-/*	if (livefd.size()>1){
-		for(set<int>::iterator it=livefd.begin();it!=livefd.end();++it){
-			if (*it!=fd){
-				string packet = "1";
-				packet = packet + PeerTable[*it].id + "#";
-//				packet = packet + fdtoid[*it] + "#";
-//				cout<<*it<<" "<<fdtoid[*it]<<endl;
-				memcpy(textBuf, packet.c_str(), packet.size());
-				return packet.size()-1;
-			}
-		}
-	}*/
 	return 0;
 }
 
@@ -128,7 +134,6 @@ callback_video_transfer(struct libwebsocket_context *context,
 //	unsigned long long timeInterval;
 
 //	int id;
-
 	switch (reason) {
 
 	case LWS_CALLBACK_ESTABLISHED:
@@ -139,11 +144,12 @@ callback_video_transfer(struct libwebsocket_context *context,
 		addr = getAddress(context, wsi);
 		PeerTable[wsi->sock] = Peer();
 		PeerTable[wsi->sock].ip = addr;
+		manageGroup(GROUP_INCREMENT, wsi->sock);
 //		fdtoip[wsi->sock] = addr;
 		packet = "0" + string(RTC_KEY);
 //		packet = "0" + itoa(wsi->sock) + "#" + RTC_KEY;
-		memcpy(textBuf, packet.c_str(), packet.size());
-		libwebsocket_write(wsi, textBuf, packet.size(), LWS_WRITE_TEXT);
+//		memcpy(textBuf, packet.c_str(), packet.size());
+//		libwebsocket_write(wsi, textBuf, packet.size(), LWS_WRITE_TEXT);
 		break;
 
 	case LWS_CALLBACK_SERVER_WRITEABLE:
@@ -181,7 +187,6 @@ callback_video_transfer(struct libwebsocket_context *context,
 			PeerTable[wsi->sock].id = rcvData+1;
 			cout<<wsi->sock<<" id: "<<rcvData<<endl;
 			livefd.insert(wsi->sock);
-			manageGroup(GROUP_INCREMENT, wsi->sock);
 			break;
 		}
 //		cout << (const char *)in << endl;
@@ -192,8 +197,9 @@ callback_video_transfer(struct libwebsocket_context *context,
 		break;
 
 	case LWS_CALLBACK_CLOSED:
-		PeerTable.erase(wsi->sock);
 		manageGroup(GROUP_DELETE, wsi->sock);
+		PeerTable.erase(wsi->sock);
+
 //		fdtoip.erase(wsi->sock);
 		livefd.erase(wsi->sock);
 //		fdtoid.erase(wsi->sock);

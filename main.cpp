@@ -57,7 +57,6 @@ int main(int argc, char **argv)
 	int n = 0;
 	int use_ssl = 0;
 	int opts = 0;
-
 	const char *iface = NULL;
 #ifndef WIN32
 	int syslog_options = LOG_PID | LOG_PERROR;
@@ -214,7 +213,7 @@ int main(int argc, char **argv)
 				sprintf(header, "0%5d%2d", imageID, i);
 //				sliceID = (sliceID+1)%GROUP_SIZE;
 				int sliceWidth = 480 / PIECE_NUM;
-				Mat slice = frame(Rect(i*sliceWidth, 0, sliceWidth, 400));
+				Mat slice = frame(Rect(i*sliceWidth, 0, sliceWidth, 50));
 				if(!imencode(".jpg", slice, imageVec, compression_params)) printf("Write error\n");
 				imageSize[i] = imageVec.size();
 				pos[i] = i==0?0:pos[i-1]+imageSize[i-1];
