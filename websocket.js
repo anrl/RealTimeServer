@@ -1,10 +1,19 @@
-var ReceiveBuffer = new Array();
-var image = new Array();
 var IMG_NUM = 8;
+var FRAME_NUM = 10;
+var image = new Array(IMG_NUM);
+var ReceiveBuffer = new Array(FRAME_NUM);
+for (var i=0;i<FRAME_NUM;i++){
+	ReceiveBuffer[i] = new Array(IMG_NUM);
+}
+var defaultPic = "http://media.zodee.net/products/20647-3855-50-white.jpg";
+var currentImage = -FRAME_NUM;
 
 var groupKey;
 var id;
-var peer = new Peer();
+var peer = new Peer({host: '132.206.55.124', port: 9000});
+peer.on('open', function(myid) {
+	id = myid;
+});
 var conn = [null, null, null, null, null, null, null, null];
 var connected = false;
 
@@ -23,9 +32,9 @@ function listenToData(i){
 		}
  	});	
  	conn[i].on('close', function(){
- 		for(var i=0; i<image.length; i++){
- 			image[i].src = null;
-		}
+// 		for(var i=0; i<image.length; i++){
+// 			image[i].src = defaultPic;
+//		}
 		conn[i] = null;
 		console.log("disconnect");
 	});
@@ -56,12 +65,11 @@ function displayImage(data) {
 	var temp = new ArrayBuffer(8);
 	reader.onload = function() {
 		temp = reader.result;
-//		var msgtype = temp.substring(0,1);
-		var imgID =  temp.substring(1,6);
+		var imgID =  parseInt(temp.substring(1,6));
+		if (currentImage>=0 && imgID > currentImage) currentImage = imgID;
 		var sliceID =  parseInt(temp.substring(6,8));
-		console.log(sliceID);
-		window.URL.revokeObjectURL(ReceiveBuffer[sliceID]);
-		ReceiveBuffer[sliceID] = window.URL.createObjectURL(dataBlob);
+		window.URL.revokeObjectURL(ReceiveBuffer[imgID%FRAME_NUM][sliceID]);
+		ReceiveBuffer[imgID%FRAME_NUM][sliceID] = window.URL.createObjectURL(dataBlob);
 	};
 	reader.readAsText(data.slice(0,8));
 }
@@ -73,22 +81,19 @@ function WebSockets(button) {
 		var address;
 		window.WebSocket = window.WebSocket || window.MozWebSocket;
 //		var ws = new WebSocket("ws://localhost:7681/websocket", "callback_video_transfer");
-		var ws = new WebSocket("ws://192.168.54.86:7681/websocket", "callback_video_transfer");
+		var ws = new WebSocket("ws://132.206.55.124:9002/websocket", "callback_video_transfer");
 		
 		ws.onopen = function(){
-			peer = new Peer({host: '192.168.54.86', port: 9000});
-			peer.on('open', function(myid) {
-				id = myid;
-				ws.send("0"+id);
-			});
+			ws.send("0"+id);
 			listenToConnection();
 		};
 		
 		var frames = 0;
-		var imageID = -1;
 		for(var i=0;i<IMG_NUM;i++){
 			image[i] = document.createElement("img");
-			image[i].width = 60;
+			image[i].width = 80;
+			image[i].height = 480;
+			image[i].src = defaultPic;
 			document.body.appendChild(image[i]);
 		}
 		var mytext = document.getElementById('mytext'); 
@@ -109,7 +114,6 @@ function WebSockets(button) {
 			}
 			else if(typeof(e.data) == "object"){
 				displayImage(e.data);
-				frames++;
 							
 				for(var i=0;i<conn.length;i++){
 					if (connected && conn[i]!=null && conn[i].open){
@@ -125,9 +129,16 @@ function WebSockets(button) {
 		}, 1000);
 		
 		setInterval(function(){
-			for(var i=0;i<IMG_NUM;i++){
-				image[i].src = ReceiveBuffer[i];
-			}		
+			if (currentImage<0) {
+				currentImage++;
+			}
+			else{
+				frames++;
+				for(var i=0;i<IMG_NUM;i++){
+					image[i].src = ReceiveBuffer[currentImage%FRAME_NUM+1][i];
+				}	
+			}
+				
 		}, 100);
     }
 }

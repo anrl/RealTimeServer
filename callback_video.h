@@ -62,7 +62,7 @@ void Redistribute(int type, int fd){
 }
 
 int findSlot(){
-	for(int i=0;i<groupTable.size();i++)
+	for(unsigned int i=0;i<groupTable.size();i++)
 		if (groupTable[i].size() != MAX_GROUP_SIZE) return i;
 	return -1;
 }
@@ -153,18 +153,11 @@ callback_video_transfer(struct libwebsocket_context *context,
 		break;
 
 	case LWS_CALLBACK_SERVER_WRITEABLE:
-//		memcpy(textBuf, PeerTable[wsi->sock].ip.c_str(), PeerTable[wsi->sock].ip.size());
-//		libwebsocket_write(wsi, textBuf, PeerTable[wsi->sock].ip.size(), LWS_WRITE_TEXT);
-//		if (groupMode[wsi->sock] == GROUP_OVERWRITE){
 		if (PeerTable[wsi->sock].mode == GROUP_INCREMENT){
 			length = makeTextPacket(GROUP_INCREMENT, wsi->sock);
 			if (length) libwebsocket_write(wsi, textBuf, length, LWS_WRITE_TEXT);
 		}
 
-
-//		libwebsocket_write(wsi, &buf[LWS_SEND_BUFFER_PRE_PADDING], 101, LWS_WRITE_TEXT);
-//		libwebsocket_write(wsi, &imageBuf[LWS_SEND_BUFFER_PRE_PADDING], buffSize, LWS_WRITE_BINARY);
-//		cout<<"transfer size "<<libwebsocket_write(wsi, imageBuf, buffSize, LWS_WRITE_BINARY)<<endl;
 		for(unsigned int i=0;i<PeerTable[wsi->sock].pieceID.size();i++){
 			int id = PeerTable[wsi->sock].pieceID[i];
 //			clock_gettime(CLOCK_MONOTONIC, &currentTime);

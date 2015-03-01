@@ -20,6 +20,7 @@
 #include <syslog.h>
 #include <signal.h>
 
+#include <thread>
 #include <iostream>
 #include <string>
 #include <sstream>

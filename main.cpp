@@ -70,7 +70,7 @@ int main(int argc, char **argv)
 #endif
 
 	memset(&info, 0, sizeof info);
-	info.port = 7681;
+	info.port = 9002;
 
 #if !defined(LWS_NO_DAEMONIZE) && !defined(WIN32)
 	/*
@@ -151,13 +151,6 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 
-
-/*	pthread_t videoThread;
-	int rc = pthread_create(&videoThread, NULL, storeVideo, NULL);
-	if (rc){
-		printf("ERROR; return code from pthread_create() is %d\n", rc);
-		exit(-1);
-	}*/
 //		Using video streaming
 	int imageID = 0;
 //	int sliceID = 0;
@@ -182,12 +175,6 @@ int main(int argc, char **argv)
 
 		gettimeofday(&tv, NULL);
 
-		/*
-		 * This provokes the LWS_CALLBACK_SERVER_WRITEABLE for every
-		 * live websocket connection using the VIDEO_TRANSFER protocol,
-		 * as soon as it can take more packets (usually immediately)
-		 */
-
 		if (((unsigned int)tv.tv_usec - oldus) > 50000) {
 			libwebsocket_callback_on_writable_all_protocol(&protocols[PROTOCOL_VIDEO_TRANSFER]);
 			oldus = tv.tv_usec;
@@ -208,26 +195,44 @@ int main(int argc, char **argv)
 			imageID = (imageID+1)%100000;
  			Mat frame;
 			camera>>frame;
-//			GROUP_SIZE = n>MAX_GROUP_SIZE?MAX_GROUP_SIZE:n;
+			Mat small;
+			double factor = 0.5;
+			resize(frame, small, Size(), factor, factor, INTER_AREA);
+
+
+			std::thread imageHashThread(imageHash, frame);
+
 			for(int i=0;i<PIECE_NUM;i++){
 				sprintf(header, "0%5d%2d", imageID, i);
-//				sliceID = (sliceID+1)%GROUP_SIZE;
-				int sliceWidth = 480 / PIECE_NUM;
-				Mat slice = frame(Rect(i*sliceWidth, 0, sliceWidth, 50));
+/*				int sliceWidth = 160 / PIECE_NUM;
+				int sliceHeight = 120;
+				Mat slice = frame(Rect(i*sliceWidth, 0, sliceWidth, sliceHeight));
+				if(!imencode(".jpg", slice, imageVec, compression_params)) printf("Write error\n");
+				imageSize[i] = imageVec.size();*/
+
+				sprintf(header, "0%5d%2d", imageID, i);
+				int sliceWidth = 640 * factor / PIECE_NUM;
+				int sliceHeight = 480 * factor;
+
+				Mat slice = small(Rect(i*sliceWidth, 0, sliceWidth, sliceHeight));
 				if(!imencode(".jpg", slice, imageVec, compression_params)) printf("Write error\n");
 				imageSize[i] = imageVec.size();
+
+/*				unsigned char buff[28800];
+				std::vector<uchar> array;
+//				array.assign(small.datastart, small.dataend);
+				array.assign((small.dataend-small.datastart)/PIECE_NUM*i+small.datastart, (small.dataend-small.datastart)/PIECE_NUM*(i+1)+small.datastart);
+//				cout << array.size() << endl;
+				memcpy(buff, array.data(), array.size());
+				ulong64 hash;*/
+//				image_Hash(buff, hash, factor);
+
+
 				pos[i] = i==0?0:pos[i-1]+imageSize[i-1];
 				memcpy(&imageBuf[pos[i]], header, HEADER_LENGTH);
 				memcpy(&imageBuf[pos[i]+HEADER_LENGTH], imageVec.data(), imageSize[i]);
 				imageSize[i] += HEADER_LENGTH;
-//				cout << i << " " << pos[i] << " " << imageSize[i] << endl;
 			}
-/*			frame = frame(Rect(0,0,200,200));
-			if(!imencode(".jpg", frame, imageVec, compression_params)) printf("Write error\n");
-			buffSize = imageVec.size();
-			memcpy (imageBuf, imageVec.data(), buffSize);*/
-//			for(int i=0;i<buffSize;i++) imageBuf[i] = imageVec[i];
-//			imageBuf[buffSize] = '\0';
 
 			for (n = 0; n < count_pollfds; n++)
 

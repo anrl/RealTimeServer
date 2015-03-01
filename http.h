@@ -22,7 +22,7 @@
 #include <string.h>
 #include <stdio.h>
 
-#define PORT 8888
+#define PORT 9001
 //#define FILENAME "picture.png"
 //#define MIMETYPE "image/png"
 
