@@ -2,11 +2,18 @@ var IMG_NUM = 8;
 var FRAME_NUM = 10;
 var image = new Array(IMG_NUM);
 var ReceiveBuffer = new Array(FRAME_NUM);
+var BackupBuffer = new Array(FRAME_NUM);
+var SequenceNum = new Array(FRAME_NUM);
+var FrameImageID = new Array(FRAME_NUM);
 for (var i=0;i<FRAME_NUM;i++){
 	ReceiveBuffer[i] = new Array(IMG_NUM);
+	BackupBuffer[i] = new Array(IMG_NUM);
+	SequenceNum[i] = new Array(IMG_NUM);
+	FrameImageID[i] = -1;
 }
 var defaultPic = "http://media.zodee.net/products/20647-3855-50-white.jpg";
 var currentImage = -FRAME_NUM;
+var lastFrame = -1;
 
 var groupKey;
 var id;
@@ -68,8 +75,21 @@ function displayImage(data) {
 		var imgID =  parseInt(temp.substring(1,6));
 		if (currentImage>=0 && imgID > currentImage) currentImage = imgID;
 		var sliceID =  parseInt(temp.substring(6,8));
-		window.URL.revokeObjectURL(ReceiveBuffer[imgID%FRAME_NUM][sliceID]);
+		
+		window.URL.revokeObjectURL(BackupBuffer[imgID%FRAME_NUM][sliceID]);
+		BackupBuffer[imgID%FRAME_NUM][sliceID] = ReceiveBuffer[imgID%FRAME_NUM][sliceID];
+//		var url = ReceiveBuffer[imgID%FRAME_NUM][sliceID];
 		ReceiveBuffer[imgID%FRAME_NUM][sliceID] = window.URL.createObjectURL(dataBlob);
+		for(var i=0;i<FRAME_NUM;i++){
+			if (ReceiveBuffer[i][sliceID] == BackupBuffer[imgID%FRAME_NUM][sliceID])
+				ReceiveBuffer[i][sliceID] = ReceiveBuffer[imgID%FRAME_NUM][sliceID];
+		}
+//		console.log("create: "+ReceiveBuffer[imgID%FRAME_NUM][sliceID]);
+//		console.log("release: "+url);
+//		window.URL.revokeObjectURL(url);
+		SequenceNum[imgID%FRAME_NUM][sliceID] = imgID;
+		if (FrameImageID[imgID%FRAME_NUM] < imgID) FrameImageID[imgID%FRAME_NUM] = imgID;
+//		console.log("sliceid: "+sliceID);
 	};
 	reader.readAsText(data.slice(0,8));
 }
@@ -110,10 +130,23 @@ function WebSockets(button) {
 			 			createConnection(groupmates[i]);
 					}				
 				}
+				else if (msgtype == "2"){
+					var content = e.data.substring(1,e.data.size);
+					var imgID =  parseInt(e.data.substring(1,6));
+					var sliceID =  e.data.substring(6,e.data.size).split("#");
+					console.log(sliceID);
+					for(var i=0;i<sliceID.length;i++){
+						var id = parseInt(sliceID[i]);
+						ReceiveBuffer[imgID%FRAME_NUM][id] = ReceiveBuffer[(imgID+FRAME_NUM-1)%FRAME_NUM][id];
+						SequenceNum[imgID%FRAME_NUM][id] = imgID;
+						if (FrameImageID[imgID%FRAME_NUM] < imgID) FrameImageID[imgID%FRAME_NUM] = imgID;
+					}
+				}
 				else mytext.innerHTML = "text: " + e.data;
 			}
 			else if(typeof(e.data) == "object"){
 				displayImage(e.data);
+				frames++;
 							
 				for(var i=0;i<conn.length;i++){
 					if (connected && conn[i]!=null && conn[i].open){
@@ -129,14 +162,19 @@ function WebSockets(button) {
 		}, 1000);
 		
 		setInterval(function(){
+			var pos = (currentImage+5)%FRAME_NUM;
 			if (currentImage<0) {
 				currentImage++;
 			}
 			else{
-				frames++;
-				for(var i=0;i<IMG_NUM;i++){
-					image[i].src = ReceiveBuffer[currentImage%FRAME_NUM+1][i];
-				}	
+//				console.log(lastFrame+" "+FrameImageID[pos]);
+				if (lastFrame < FrameImageID[pos]){
+					lastFrame = FrameImageID[pos];
+					for(var i=0;i<IMG_NUM;i++){
+						if (SequenceNum[pos][i] < FrameImageID[pos]) ReceiveBuffer[pos][i] = ReceiveBuffer[(IMG_NUM+pos-1)%IMG_NUM][i];
+						image[i].src = ReceiveBuffer[pos][i];
+					}
+				}
 			}
 				
 		}, 100);

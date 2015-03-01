@@ -16,6 +16,7 @@
 using namespace std;
 using namespace cimg_library;
 
+
 #if defined( _MSC_VER) || defined(_BORLANDC_)
 typedef unsigned _uint64 ulong64;
 typedef signed _int64 long64;
@@ -23,6 +24,9 @@ typedef signed _int64 long64;
 typedef unsigned long long ulong64;
 typedef signed long long long64;
 #endif
+
+extern bool piece_send[PIECE_NUM];
+ulong64 HashValue[PIECE_NUM] = {0};
 
 CImg<float>* ph_dct_matrix(const int N){
     CImg<float> *ptr_matrix = new CImg<float>(N,N,1,1,1/sqrt((float)N));
@@ -35,86 +39,18 @@ CImg<float>* ph_dct_matrix(const int N){
     return ptr_matrix;
 }
 
-/*int *imageHash(void* ptr){
-	const char * buffer = (const char *) ptr;
-	CImg<uint8_t> src(buffer, 160, 160, 1, 3);
-    CImg<float> meanfilter(7,7,1,1,1);
-    CImg<float> img;
-    if (src.spectrum() == 3){
-        img = src.RGBtoYCbCr().channel(0).get_convolve(meanfilter);
-    } else if (src.spectrum() == 4){
-	int width = img.width();
-        int height = img.height();
-        int depth = img.depth();
-	img = src.crop(0,0,0,0,width-1,height-1,depth-1,2).RGBtoYCbCr().channel(0).get_convolve(meanfilter);
-    } else {
-	img = src.channel(0).get_convolve(meanfilter);
-    }
-
-    img.resize(32,32);
-    CImg<float> *C  = ph_dct_matrix(32);
-    CImg<float> Ctransp = C->get_transpose();
-    CImg<float> dctImage = (*C)*img*Ctransp;
-    CImg<float> subsec = dctImage.crop(1,1,8,8).unroll('x');;
-    float median = subsec.median();
-    ulong64 one = 0x0000000000000001;
-    ulong64 hash = 0x0000000000000000;
-    for (int i=0;i< 64;i++){
-    	float current = subsec(i);
-        if (current > median)
-        	hash |= one;
-        one = one << 1;
-    }
-//  	cout<<hash<<endl;
-    delete C;
-
-    return 0;
-}*/
-
-#include <cv.h>
-#include <highgui.h>
-using namespace cv;
-void test(){
-	unsigned char buff[30000], buff2[30000];
-	Mat img;
-	img = imread("split.jpg",CV_LOAD_IMAGE_COLOR);
-	std::vector<uchar> array;
-	array.assign(img.datastart, img.dataend);
-	memcpy(buff, array.data(), array.size());
-
-	for(int i=0;i<30000;i++){
-		int no = i/3;
-		switch (i%3){
-		case 0:
-			buff2[20000+no] = buff[i];
-			break;
-		case 1:
-			buff2[10000+no] = buff[i];
-			break;
-		case 2:
-			buff2[no] = buff[i];
-			break;
-		}
-	}
-	CImg<uint8_t> src(buff2, 100, 100, 1, 3);
-	src.display();
-
-}
-
-void imageHash(Mat fr){
+void imageHash(Mat origin){
 	Mat frame;
 	ulong64 hash;
-	double factor = 0.5;
-	int width, height;
-	if (frame.cols>320) {
-		factor = 320.0/frame.cols;
-		resize(frame, frame, Size(), factor, factor, INTER_AREA);
-		width = 320;
-		height = 240;
+	double factor = 0.25;
+	int width = 640*factor, height = 480*factor;
+	if (origin.cols > width) {
+		factor = width*1.0/origin.cols;
+		resize(origin, frame, Size(), factor, factor, INTER_AREA);
 	}
 	else{
-		width = frame.cols;
-		height = frame.rows;
+		width = origin.cols;
+		height = origin.rows;
 	}
 	int size = width * height * 3;
 	unsigned char buff[size];
@@ -130,7 +66,6 @@ void imageHash(Mat fr){
 		int colPos = no / width;
 		int sectionNo = rowPos / section_width;
 		int sectionPos = no % section_width;
-//		int colorNo = i/3;
 		switch (i%3){
 		case 0:
 			buff[section*sectionNo + colorsection*2 + colPos*section_width + sectionPos] = array[i];
@@ -175,10 +110,17 @@ void imageHash(Mat fr){
 			hash |= one;
 		one = one << 1;
 		}
-//		cout<<hash<<endl;
+		double v = 1.0*HashValue[i]/hash;
+		if (v!=1.0){
+			cout << v << endl;
+			HashValue[i] = hash;
+			piece_send[i] = true;
+		}
+		else {
+			piece_send[i] = false;
+		}
 		delete C;
 	}
-    cout << "thread end"<<endl;
 }
 
 int image_Hash(unsigned char* buffer, ulong64 &hash, double factor){

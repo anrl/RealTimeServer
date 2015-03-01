@@ -20,6 +20,7 @@ unsigned char* imageBuf = new unsigned char[200000];
 unsigned char* textBuf = new unsigned char[10000];
 int *pos = new int[PIECE_NUM];
 int *imageSize = new int[PIECE_NUM];
+bool piece_send[PIECE_NUM];
 
 //struct timespec currentTime;
 
@@ -118,6 +119,16 @@ int makeTextPacket(int type, int fd){
 		PeerTable[fd].mode = 0;
 		return packet.size()-1;
 	}
+	else if (type == PIECE_DUPLICATE){
+		string packet;
+		textBuf[0] = '2';
+		memcpy(textBuf+1, imageBuf+1, 5);
+		for(int i=0;i<PIECE_NUM;i++)
+			if (!piece_send[i]) packet = packet + itoa(i) + '#';
+		if (packet.size()==0) return 0;
+		memcpy(textBuf+6, packet.c_str(), packet.size()-1);
+		return packet.size() + 6 - 1;
+	}
 	return 0;
 }
 
@@ -158,17 +169,30 @@ callback_video_transfer(struct libwebsocket_context *context,
 			if (length) libwebsocket_write(wsi, textBuf, length, LWS_WRITE_TEXT);
 		}
 
-		for(unsigned int i=0;i<PeerTable[wsi->sock].pieceID.size();i++){
-			int id = PeerTable[wsi->sock].pieceID[i];
-//			clock_gettime(CLOCK_MONOTONIC, &currentTime);
-//			timeInterval = timespecDiff(&currentTime, &PeerTable[wsi->sock].lastSend)/1000;
-//			if (timeInterval < WAIT_TIME) usleep(WAIT_TIME - timeInterval);
-			//in order not to overwhelm client
-			while (lws_send_pipe_choked(wsi)) {}	//in order not to overwhelm server
-			libwebsocket_write(wsi, &imageBuf[pos[id]], imageSize[id], LWS_WRITE_BINARY);
-//			clock_gettime(CLOCK_MONOTONIC, &PeerTable[wsi->sock].lastSend);
+		if (PeerTable[wsi->sock].newComer){
+			for(int i=0;i<PIECE_NUM;i++){
+				while (lws_send_pipe_choked(wsi)) {}	//in order not to overwhelm server
+				libwebsocket_write(wsi, &imageBuf[pos[i]], imageSize[i], LWS_WRITE_BINARY);
+			}
+			PeerTable[wsi->sock].newComer = false;
 		}
+		else {
+			length = makeTextPacket(PIECE_DUPLICATE, -1);
+			if (length) libwebsocket_write(wsi, textBuf, length, LWS_WRITE_TEXT);
+			for(unsigned int i=0;i<PeerTable[wsi->sock].pieceID.size();i++){
+				int id = PeerTable[wsi->sock].pieceID[i];
+	//			clock_gettime(CLOCK_MONOTONIC, &currentTime);
+	//			timeInterval = timespecDiff(&currentTime, &PeerTable[wsi->sock].lastSend)/1000;
+	//			if (timeInterval < WAIT_TIME) usleep(WAIT_TIME - timeInterval);
+				//in order not to overwhelm client
+				if (piece_send[id]){
+					while (lws_send_pipe_choked(wsi)) {}	//in order not to overwhelm server
+					libwebsocket_write(wsi, &imageBuf[pos[id]], imageSize[id], LWS_WRITE_BINARY);
+				}
 
+	//			clock_gettime(CLOCK_MONOTONIC, &PeerTable[wsi->sock].lastSend);
+			}
+		}
 		break;
 
 	case LWS_CALLBACK_RECEIVE:

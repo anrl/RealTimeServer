@@ -243,8 +243,9 @@ struct Peer{
 	int groupNo;
 	int groupPos;
 	int mode;
+	bool newComer;
 	queue<int> peerToConnect;
-	Peer():groupNo(0), mode(0), groupPos(0) {
+	Peer():groupNo(0), mode(0), groupPos(0), newComer(true) {
 		for(int i=0;i<PIECE_NUM;i++) pieceID.push_back(i);
 	}
 	vector<int> pieceID;
@@ -256,7 +257,8 @@ enum groupManage{
 	GROUP_INCREMENT = 1,
 	GROUP_CREATE, //may be useless
 	GROUP_DELETE,
-	GROUP_OVERWRITE
+	GROUP_OVERWRITE,
+	PIECE_DUPLICATE
 };
 
 #endif /* SERVER_H_ */

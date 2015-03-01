@@ -203,12 +203,6 @@ int main(int argc, char **argv)
 			std::thread imageHashThread(imageHash, frame);
 
 			for(int i=0;i<PIECE_NUM;i++){
-				sprintf(header, "0%5d%2d", imageID, i);
-/*				int sliceWidth = 160 / PIECE_NUM;
-				int sliceHeight = 120;
-				Mat slice = frame(Rect(i*sliceWidth, 0, sliceWidth, sliceHeight));
-				if(!imencode(".jpg", slice, imageVec, compression_params)) printf("Write error\n");
-				imageSize[i] = imageVec.size();*/
 
 				sprintf(header, "0%5d%2d", imageID, i);
 				int sliceWidth = 640 * factor / PIECE_NUM;
@@ -218,21 +212,13 @@ int main(int argc, char **argv)
 				if(!imencode(".jpg", slice, imageVec, compression_params)) printf("Write error\n");
 				imageSize[i] = imageVec.size();
 
-/*				unsigned char buff[28800];
-				std::vector<uchar> array;
-//				array.assign(small.datastart, small.dataend);
-				array.assign((small.dataend-small.datastart)/PIECE_NUM*i+small.datastart, (small.dataend-small.datastart)/PIECE_NUM*(i+1)+small.datastart);
-//				cout << array.size() << endl;
-				memcpy(buff, array.data(), array.size());
-				ulong64 hash;*/
-//				image_Hash(buff, hash, factor);
-
-
 				pos[i] = i==0?0:pos[i-1]+imageSize[i-1];
 				memcpy(&imageBuf[pos[i]], header, HEADER_LENGTH);
 				memcpy(&imageBuf[pos[i]+HEADER_LENGTH], imageVec.data(), imageSize[i]);
 				imageSize[i] += HEADER_LENGTH;
 			}
+
+			imageHashThread.join();
 
 			for (n = 0; n < count_pollfds; n++)
 
