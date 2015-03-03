@@ -134,7 +134,6 @@ function WebSockets(button) {
 					var content = e.data.substring(1,e.data.size);
 					var imgID =  parseInt(e.data.substring(1,6));
 					var sliceID =  e.data.substring(6,e.data.size).split("#");
-					console.log(sliceID);
 					for(var i=0;i<sliceID.length;i++){
 						var id = parseInt(sliceID[i]);
 						ReceiveBuffer[imgID%FRAME_NUM][id] = ReceiveBuffer[(imgID+FRAME_NUM-1)%FRAME_NUM][id];

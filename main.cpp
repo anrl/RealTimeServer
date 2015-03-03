@@ -15,9 +15,9 @@ int max_poll_elements;
 struct pollfd *pollfds;
 int *fd_lookup;
 int count_pollfds;
-extern unsigned char* imageBuf;
-extern int *pos;
-extern int *imageSize;
+//extern unsigned char* imageBuf;
+//extern int *pos;
+//extern int *imageSize;
 
 static volatile int force_exit = 0;
 static struct libwebsocket_context *context;
@@ -217,6 +217,9 @@ int main(int argc, char **argv)
 				memcpy(&imageBuf[pos[i]+HEADER_LENGTH], imageVec.data(), imageSize[i]);
 				imageSize[i] += HEADER_LENGTH;
 			}
+
+			//send pieces in round-robin way
+			pieceReorder();
 
 			imageHashThread.join();
 

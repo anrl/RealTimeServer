@@ -39,10 +39,51 @@ CImg<float>* ph_dct_matrix(const int N){
     return ptr_matrix;
 }
 
+void pieceHash(CImg<uint8_t> src, int i){
+	ulong64 hash;
+	CImg<float> meanfilter(7,7,1,1,1);
+	CImg<float> img;
+	if (src.spectrum() == 3){
+		img = src.RGBtoYCbCr().channel(0).get_convolve(meanfilter);
+	} else if (src.spectrum() == 4){
+	int width = img.width();
+		int height = img.height();
+		int depth = img.depth();
+	img = src.crop(0,0,0,0,width-1,height-1,depth-1,2).RGBtoYCbCr().channel(0).get_convolve(meanfilter);
+	} else {
+	img = src.channel(0).get_convolve(meanfilter);
+	}
+
+	img.resize(32,32);
+
+	CImg<float> *C  = ph_dct_matrix(32);
+	CImg<float> Ctransp = C->get_transpose();
+	CImg<float> dctImage = (*C)*img*Ctransp;
+	CImg<float> subsec = dctImage.crop(1,1,8,8).unroll('x');;
+
+	float median = subsec.median();
+	ulong64 one = 0x0000000000000001;
+	hash = 0x0000000000000000;
+	for (int i=0;i< 64;i++){
+	float current = subsec(i);
+		if (current > median)
+		hash |= one;
+	one = one << 1;
+	}
+	double v = 1.0*HashValue[i]/hash;
+	if (v!=1.0){
+		HashValue[i] = hash;
+		piece_send[i] = true;
+	}
+	else {
+		piece_send[i] = false;
+	}
+	delete C;
+}
+
 void imageHash(Mat origin){
 	Mat frame;
-	ulong64 hash;
-	double factor = 0.25;
+	double factor = 0.5;
 	int width = 640*factor, height = 480*factor;
 	if (origin.cols > width) {
 		factor = width*1.0/origin.cols;
@@ -78,89 +119,10 @@ void imageHash(Mat origin){
 			break;
 		}
 	}
-
+	vector<thread> threads;
 	for(int i=0;i<PIECE_NUM;i++){
 		CImg<uint8_t> src(buff+i*section, section_width, height, 1, 3);
-		CImg<float> meanfilter(7,7,1,1,1);
-		CImg<float> img;
-		if (src.spectrum() == 3){
-			img = src.RGBtoYCbCr().channel(0).get_convolve(meanfilter);
-		} else if (src.spectrum() == 4){
-		int width = img.width();
-			int height = img.height();
-			int depth = img.depth();
-		img = src.crop(0,0,0,0,width-1,height-1,depth-1,2).RGBtoYCbCr().channel(0).get_convolve(meanfilter);
-		} else {
-		img = src.channel(0).get_convolve(meanfilter);
-		}
-
-		img.resize(32,32);
-
-		CImg<float> *C  = ph_dct_matrix(32);
-		CImg<float> Ctransp = C->get_transpose();
-		CImg<float> dctImage = (*C)*img*Ctransp;
-		CImg<float> subsec = dctImage.crop(1,1,8,8).unroll('x');;
-
-		float median = subsec.median();
-		ulong64 one = 0x0000000000000001;
-		hash = 0x0000000000000000;
-		for (int i=0;i< 64;i++){
-		float current = subsec(i);
-			if (current > median)
-			hash |= one;
-		one = one << 1;
-		}
-		double v = 1.0*HashValue[i]/hash;
-		if (v!=1.0){
-			cout << v << endl;
-			HashValue[i] = hash;
-			piece_send[i] = true;
-		}
-		else {
-			piece_send[i] = false;
-		}
-		delete C;
+		threads.push_back(thread(pieceHash, src, i));
 	}
-}
-
-int image_Hash(unsigned char* buffer, ulong64 &hash, double factor){
-	CImg<uint8_t> src(buffer, 80*factor, 480*factor, 1, 3);
-
-    CImg<float> meanfilter(7,7,1,1,1);
-    CImg<float> img;
-    if (src.spectrum() == 3){
-        img = src.RGBtoYCbCr().channel(0).get_convolve(meanfilter);
-    } else if (src.spectrum() == 4){
-	int width = img.width();
-        int height = img.height();
-        int depth = img.depth();
-	img = src.crop(0,0,0,0,width-1,height-1,depth-1,2).RGBtoYCbCr().channel(0).get_convolve(meanfilter);
-    } else {
-	img = src.channel(0).get_convolve(meanfilter);
-    }
-
-    img.resize(32,32);
-
-
-    CImg<float> *C  = ph_dct_matrix(32);
-    CImg<float> Ctransp = C->get_transpose();
-
-    CImg<float> dctImage = (*C)*img*Ctransp;
-
-    CImg<float> subsec = dctImage.crop(1,1,8,8).unroll('x');;
-
-    float median = subsec.median();
-    ulong64 one = 0x0000000000000001;
-    hash = 0x0000000000000000;
-    for (int i=0;i< 64;i++){
-	float current = subsec(i);
-        if (current > median)
-	    hash |= one;
-	one = one << 1;
-    }
-
-  	cout<<hash<<endl;
-    delete C;
-
-    return 0;
+	for(auto& t: threads) t.join();
 }

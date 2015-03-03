@@ -24,6 +24,15 @@ bool piece_send[PIECE_NUM];
 
 //struct timespec currentTime;
 
+//send pieces in round-robin way
+void pieceReorder(){
+	for (auto& pair: PeerTable){
+		Peer p = pair.second;
+		for(unsigned int i=0;i<p.pieceID.size();i++) pair.second.pieceID[i] = (p.pieceID[i]+1)%PIECE_NUM;
+	}
+}
+
+//find the peer who can split his content or accept more content
 int findIndex(int type, vector<int> group, int fd){
 	unsigned int val = MAX_GROUP_SIZE / group.size();
 	for (int i=0;i<(int)group.size();i++){
@@ -70,15 +79,16 @@ int findSlot(){
 
 void manageGroup(int type, int fd){
 //type = GROUP_INCREMENT, new peer joins
-//Only consider the first group right now
 	int groupNo = findSlot();
 	if (type==GROUP_INCREMENT){
+		//if no group exists or all groups are full
 		if (groupNo==-1) {
 			vector<int> thisGroup;
 			thisGroup.push_back(fd);
 			PeerTable[fd].groupNo = groupTable.size();
 			groupTable.push_back(thisGroup);
 		}
+		//when a slot is found
 		else{
 			int pos = (int)groupTable[groupNo].size();
 			for(int i=0;i<pos;i++){
@@ -169,12 +179,11 @@ callback_video_transfer(struct libwebsocket_context *context,
 			if (length) libwebsocket_write(wsi, textBuf, length, LWS_WRITE_TEXT);
 		}
 
-		if (PeerTable[wsi->sock].newComer){
+		if (!PeerTable[wsi->sock].sendAll){
 			for(int i=0;i<PIECE_NUM;i++){
 				while (lws_send_pipe_choked(wsi)) {}	//in order not to overwhelm server
 				libwebsocket_write(wsi, &imageBuf[pos[i]], imageSize[i], LWS_WRITE_BINARY);
 			}
-			PeerTable[wsi->sock].newComer = false;
 		}
 		else {
 			length = makeTextPacket(PIECE_DUPLICATE, -1);
@@ -193,6 +202,7 @@ callback_video_transfer(struct libwebsocket_context *context,
 	//			clock_gettime(CLOCK_MONOTONIC, &PeerTable[wsi->sock].lastSend);
 			}
 		}
+		PeerTable[wsi->sock].sendAll = (PeerTable[wsi->sock].sendAll+1)%10;
 		break;
 
 	case LWS_CALLBACK_RECEIVE:

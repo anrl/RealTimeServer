@@ -243,9 +243,9 @@ struct Peer{
 	int groupNo;
 	int groupPos;
 	int mode;
-	bool newComer;
+	int sendAll;
 	queue<int> peerToConnect;
-	Peer():groupNo(0), mode(0), groupPos(0), newComer(true) {
+	Peer():groupNo(0), mode(0), groupPos(0), sendAll(0) {
 		for(int i=0;i<PIECE_NUM;i++) pieceID.push_back(i);
 	}
 	vector<int> pieceID;
