@@ -15,6 +15,7 @@ int max_poll_elements;
 struct pollfd *pollfds;
 int *fd_lookup;
 int count_pollfds;
+
 //extern unsigned char* imageBuf;
 //extern int *pos;
 //extern int *imageSize;
@@ -152,8 +153,7 @@ int main(int argc, char **argv)
 	}
 
 //		Using video streaming
-	int imageID = 0;
-//	int sliceID = 0;
+	imageID = 0;
 	char *header = new char[HEADER_LENGTH];
 	VideoCapture camera;
 	vector<uchar> imageVec;
@@ -217,10 +217,10 @@ int main(int argc, char **argv)
 				memcpy(&imageBuf[pos[i]+HEADER_LENGTH], imageVec.data(), imageSize[i]);
 				imageSize[i] += HEADER_LENGTH;
 			}
-
+			//check if there are two groups that can be merged into one group
+			mergeGroups();
 			//send pieces in round-robin way
 			pieceReorder();
-
 			imageHashThread.join();
 
 			for (n = 0; n < count_pollfds; n++)

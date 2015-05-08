@@ -1,14 +1,20 @@
-var IMG_NUM = 8;
-var FRAME_NUM = 10;
-var image = new Array(IMG_NUM);
-var ReceiveBuffer = new Array(FRAME_NUM);
-var BackupBuffer = new Array(FRAME_NUM);
-var SequenceNum = new Array(FRAME_NUM);
-var FrameImageID = new Array(FRAME_NUM);
+var PIECE_NUM = 8;
+var FRAME_NUM = 40;
+var image = new Array(PIECE_NUM);	//document element of images
+var ReceiveBuffer = new Array(FRAME_NUM); //store URLs of each piece displayed
+//var BackupBuffer = new Array(FRAME_NUM); 
+var SequenceNum = new Array(FRAME_NUM); //store the imageID of each piece in each frame
+var FrameImageID = new Array(FRAME_NUM); //store the largest imageID of frame
+var RESPONSIBILITY_MAP = new Array(PIECE_NUM); 
+//store the responsibility relationship between peers and pieces, when imageID = RESPONSIBILITY_imageID
+var RESPONSIBILITY_imageID;
+var fd;
+
+//Initialization of arrays
 for (var i=0;i<FRAME_NUM;i++){
-	ReceiveBuffer[i] = new Array(IMG_NUM);
-	BackupBuffer[i] = new Array(IMG_NUM);
-	SequenceNum[i] = new Array(IMG_NUM);
+	ReceiveBuffer[i] = new Array(PIECE_NUM);
+//	BackupBuffer[i] = new Array(PIECE_NUM);
+	SequenceNum[i] = new Array(PIECE_NUM);
 	FrameImageID[i] = -1;
 }
 var defaultPic = "http://media.zodee.net/products/20647-3855-50-white.jpg";
@@ -50,7 +56,7 @@ function listenToData(i){
 function createConnection(groupmate) {
 	console.log("create");
 	var i = findEmptyPeer();
-	conn[i] = peer.connect(groupmate);
+	conn[i] = peer.connect(groupmate, {reliable: true});
 	connected = true;
 	listenToData(i);
 }
@@ -65,7 +71,22 @@ function listenToConnection() {
 		listenToData(i);	
 	});
 }
-			
+
+function garbageCollection(sliceID, imgID){
+	var pos = imgID % FRAME_NUM;
+	var flag = false;
+	for(var i=0;i<FRAME_NUM;i++){
+		if ((i!=pos) && (ReceiveBuffer[pos][sliceID]==ReceiveBuffer[i][sliceID])){
+			flag = true;
+			break;
+		}
+	}
+	if (!flag) window.URL.revokeObjectURL(ReceiveBuffer[pos][sliceID]);
+	if (typeof SequenceNum[pos][sliceID] === 'undefined' || SequenceNum[pos][sliceID] < imgID)
+		SequenceNum[pos][sliceID] = imgID;
+	if (FrameImageID[pos] < imgID) FrameImageID[pos] = imgID;
+}
+
 function displayImage(data) {
 	var dataBlob = new Blob([data.slice(8, data.size)], {type: 'image/jpeg'});
 	var reader = new FileReader();
@@ -73,23 +94,11 @@ function displayImage(data) {
 	reader.onload = function() {
 		temp = reader.result;
 		var imgID =  parseInt(temp.substring(1,6));
+		var pos = imgID%FRAME_NUM;
 		if (currentImage>=0 && imgID > currentImage) currentImage = imgID;
-		var sliceID =  parseInt(temp.substring(6,8));
-		
-		window.URL.revokeObjectURL(BackupBuffer[imgID%FRAME_NUM][sliceID]);
-		BackupBuffer[imgID%FRAME_NUM][sliceID] = ReceiveBuffer[imgID%FRAME_NUM][sliceID];
-//		var url = ReceiveBuffer[imgID%FRAME_NUM][sliceID];
-		ReceiveBuffer[imgID%FRAME_NUM][sliceID] = window.URL.createObjectURL(dataBlob);
-		for(var i=0;i<FRAME_NUM;i++){
-			if (ReceiveBuffer[i][sliceID] == BackupBuffer[imgID%FRAME_NUM][sliceID])
-				ReceiveBuffer[i][sliceID] = ReceiveBuffer[imgID%FRAME_NUM][sliceID];
-		}
-//		console.log("create: "+ReceiveBuffer[imgID%FRAME_NUM][sliceID]);
-//		console.log("release: "+url);
-//		window.URL.revokeObjectURL(url);
-		SequenceNum[imgID%FRAME_NUM][sliceID] = imgID;
-		if (FrameImageID[imgID%FRAME_NUM] < imgID) FrameImageID[imgID%FRAME_NUM] = imgID;
-//		console.log("sliceid: "+sliceID);
+		var sliceID =  parseInt(temp.substring(6,8));	
+		garbageCollection(sliceID, imgID);
+		ReceiveBuffer[pos][sliceID] = window.URL.createObjectURL(dataBlob);
 	};
 	reader.readAsText(data.slice(0,8));
 }
@@ -109,7 +118,7 @@ function WebSockets(button) {
 		};
 		
 		var frames = 0;
-		for(var i=0;i<IMG_NUM;i++){
+		for(var i=0;i<PIECE_NUM;i++){
 			image[i] = document.createElement("img");
 			image[i].width = 80;
 			image[i].height = 480;
@@ -130,15 +139,38 @@ function WebSockets(button) {
 			 			createConnection(groupmates[i]);
 					}				
 				}
+				//msgtype = 2, some pieces of the frame is exact the same as the previous frame
 				else if (msgtype == "2"){
-					var content = e.data.substring(1,e.data.size);
 					var imgID =  parseInt(e.data.substring(1,6));
 					var sliceID =  e.data.substring(6,e.data.size).split("#");
 					for(var i=0;i<sliceID.length;i++){
 						var id = parseInt(sliceID[i]);
-						ReceiveBuffer[imgID%FRAME_NUM][id] = ReceiveBuffer[(imgID+FRAME_NUM-1)%FRAME_NUM][id];
-						SequenceNum[imgID%FRAME_NUM][id] = imgID;
-						if (FrameImageID[imgID%FRAME_NUM] < imgID) FrameImageID[imgID%FRAME_NUM] = imgID;
+						garbageCollection(id, imgID);
+						if (currentImage>0)
+							ReceiveBuffer[imgID%FRAME_NUM][id] = ReceiveBuffer[currentImage%FRAME_NUM][id];
+						else
+							for(var j=0;j<FRAME_NUM;j++)
+								if (typeof ReceiveBuffer[(imgID+FRAME_NUM-j)%FRAME_NUM][id] !== 'undefined'){
+									ReceiveBuffer[imgID%FRAME_NUM][id] = ReceiveBuffer[(imgID+FRAME_NUM-j)%FRAME_NUM][id];
+									break;
+								}
+					}
+					if (currentImage>=0 && imgID > currentImage) currentImage = imgID;
+				}
+				//msgtype = 3, send the relationship map between peers and pieces
+				else if (msgtype == "3"){
+					var content = e.data.substring(1,e.data.size).split("#");
+					RESPONSIBILITY_imageID = parseInt(content[0]);
+					fd = parseInt(content[1]);
+					for(var i=2;i<content.length;i++) {
+						var peer_piece = content[i].split(":");
+						var piece = parseInt(peer_piece[1]);
+						RESPONSIBILITY_MAP[piece] = parseInt(peer_piece[0]);
+					}
+					console.log("image id "+RESPONSIBILITY_imageID);
+					console.log("fd is "+fd);
+					for(var i=0;i<PIECE_NUM;i++) {
+						console.log(i+" : "+RESPONSIBILITY_MAP[i]);
 					}
 				}
 				else mytext.innerHTML = "text: " + e.data;
@@ -161,20 +193,33 @@ function WebSockets(button) {
 		}, 1000);
 		
 		setInterval(function(){
-			var pos = (currentImage+5)%FRAME_NUM;
+			var pos = (currentImage+10)%FRAME_NUM;
 			if (currentImage<0) {
 				currentImage++;
 			}
 			else{
 //				console.log(lastFrame+" "+FrameImageID[pos]);
-				if (lastFrame < FrameImageID[pos]){
+//				if (currentImage!=FrameImageID[currentImage%FRAME_NUM])
+//					console.log(FrameImageID[currentImage%FRAME_NUM]+" "+currentImage);
+				if (lastFrame <= FrameImageID[pos]){
 					lastFrame = FrameImageID[pos];
-					for(var i=0;i<IMG_NUM;i++){
-						if (SequenceNum[pos][i] < FrameImageID[pos]) ReceiveBuffer[pos][i] = ReceiveBuffer[(IMG_NUM+pos-1)%IMG_NUM][i];
+					for(var i=0;i<PIECE_NUM;i++){
+						if (SequenceNum[pos][i] < FrameImageID[pos]) {
+							console.log("current image id: "+lastFrame+", piece No."+i+", this image id: "+SequenceNum[pos][i]);
+							if (SequenceNum[pos][i] < SequenceNum[(pos+FRAME_NUM-1)%FRAME_NUM][i])
+								ReceiveBuffer[pos][i] = ReceiveBuffer[(pos+FRAME_NUM-1)%FRAME_NUM][i];
+//							garbageCollection(i, pos);
+							SequenceNum[pos][i] = FrameImageID[pos];
+						}
+						else if(SequenceNum[pos][i] > FrameImageID[pos])
+							console.log(SequenceNum[pos][i]+" > "+FrameImageID[pos]);
 						image[i].src = ReceiveBuffer[pos][i];
 					}
 				}
+				else
+					console.log(FrameImageID[pos]+" "+lastFrame);
 			}
+			
 				
 		}, 100);
     }

@@ -34,7 +34,7 @@
 
 using namespace std;
 
-#define LOCAL_RESOURCE_PATH "/home/frye/workspace/tryCV"
+#define LOCAL_RESOURCE_PATH "/home/frye/workspace/Video_Server"
 #define MAX_GROUP_SIZE 8
 #define MAX_CLIENT_NUM 256
 #define HEADER_LENGTH 8
@@ -139,10 +139,10 @@ const char * get_mimetype(const char *file)
 
 	if (n < 5)
 		return NULL;
-
+/*
 	if (!strcmp(&file[n - 4], ".ico"))
 		return "image/x-icon";
-
+*/
 	if (!strcmp(&file[n - 4], ".png"))
 		return "image/png";
 
@@ -241,11 +241,10 @@ struct Peer{
 	string ip;
 	string id;
 	int groupNo;
-	int groupPos;
 	int mode;
 	int sendAll;
 	queue<int> peerToConnect;
-	Peer():groupNo(0), mode(0), groupPos(0), sendAll(0) {
+	Peer():groupNo(0), mode(0), sendAll(0) {
 		for(int i=0;i<PIECE_NUM;i++) pieceID.push_back(i);
 	}
 	vector<int> pieceID;
@@ -257,7 +256,8 @@ enum groupManage{
 	GROUP_INCREMENT = 1,
 	GROUP_CREATE, //may be useless
 	GROUP_DELETE,
-	GROUP_OVERWRITE,
+	GROUP_MERGE,
+	RESPONSIBILITY_MAP,
 	PIECE_DUPLICATE
 };
 

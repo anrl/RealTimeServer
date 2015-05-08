@@ -83,7 +83,7 @@ void pieceHash(CImg<uint8_t> src, int i){
 
 void imageHash(Mat origin){
 	Mat frame;
-	double factor = 0.5;
+	double factor = 0.25;
 	int width = 640*factor, height = 480*factor;
 	if (origin.cols > width) {
 		factor = width*1.0/origin.cols;
