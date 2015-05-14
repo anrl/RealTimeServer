@@ -275,6 +275,7 @@ callback_video_transfer(struct libwebsocket_context *context,
 			if (length) libwebsocket_write(wsi, textBuf, length, LWS_WRITE_TEXT);
 		}
 		if (!PeerTable[wsi->sock].sendAll){
+		//periodically send the whols image
 			for(int i=0;i<PIECE_NUM;i++){
 				while (lws_send_pipe_choked(wsi)) {}	//in order not to overwhelm server
 				libwebsocket_write(wsi, &imageBuf[pos[i]], imageSize[i], LWS_WRITE_BINARY);
@@ -282,7 +283,9 @@ callback_video_transfer(struct libwebsocket_context *context,
 		}
 		else {
 			length = makeTextPacket(PIECE_DUPLICATE, -1);
+
 			if (length) libwebsocket_write(wsi, textBuf, length, LWS_WRITE_TEXT);
+
 			for(unsigned int i=0;i<PeerTable[wsi->sock].pieceID.size();i++){
 				int id = PeerTable[wsi->sock].pieceID[i];
 	//			clock_gettime(CLOCK_MONOTONIC, &currentTime);

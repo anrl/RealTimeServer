@@ -171,23 +171,23 @@ function WebSockets(button) {
 				else if (msgtype == "3"){
 					var content = e.data.substring(1,e.data.size).split("#");
 					RESPONSIBILITY_imageID = parseInt(content[0]);
-					myfd = parseInt(content[1]);
+					fd = parseInt(content[1]);
 					for(var i=2;i<content.length;i++) {
 						var peer_piece = content[i].split(":");
 						var piece = parseInt(peer_piece[1]);
 						RESPONSIBILITY_MAP[piece] = parseInt(peer_piece[0]);
 					}
 					console.log("image id "+RESPONSIBILITY_imageID);
-					console.log("fd is "+myfd);
-					for(var fd in Slow_Value){
-						if (RESPONSIBILITY_MAP.indexOf(parseInt(fd)) == -1)
-							delete Slow_Value[fd];
-					}
+					console.log("fd is "+fd);
+//					var temp = Slow_Value;					
 					for(var i=0;i<PIECE_NUM;i++) {
+//						temp[RESPONSIBILITY_MAP[i]] = 0;
 						console.log(i+" : "+RESPONSIBILITY_MAP[i]);
-						if (!(RESPONSIBILITY_MAP[i] in Slow_Value))
-							Slow_Value[RESPONSIBILITY_MAP[i]] = 0;
+						Slow_Value[RESPONSIBILITY_MAP[i]] = 0;
+//						if (typeof temp[RESPONSIBILITY_MAP[i]] !== 'undefined')
+//							Slow_Value[RESPONSIBILITY_MAP[i]] = temp[RESPONSIBILITY_MAP[i]];
 					}
+//					for(var key in SLow_Value)
 					
 				}
 				else mytext.innerHTML = "text: " + e.data;
@@ -243,10 +243,8 @@ function WebSockets(button) {
 			}
 			counter++;
 			console.log(counter);
-			for(var fd in Slow_Value){
-				if (fd==myfd) console.log("server value: "+Slow_Value[fd]);
-				else console.log("fd: "+fd+" value: "+Slow_Value[fd]);
-			}
+			for(var fd in Slow_Value)
+				console.log("fd: "+fd+" value: "+Slow_Value[fd]);
 				
 		}, 100);
     }
